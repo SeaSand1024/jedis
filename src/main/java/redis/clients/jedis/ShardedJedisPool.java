@@ -31,6 +31,11 @@ public class ShardedJedisPool extends Pool<ShardedJedis> {
     super(poolConfig, new ShardedJedisFactory(shards, algo, keyTagPattern));
   }
 
+  public ShardedJedisPool(final GenericObjectPoolConfig poolConfig, List<JedisShardInfo> shards,
+                          Hashing algo, Pattern keyTagPattern,Boolean isCompatiblePythonRedisShardAPI) {
+    super(poolConfig, new ShardedJedisFactory(shards, algo, keyTagPattern,isCompatiblePythonRedisShardAPI));
+  }
+
   @Override
   public ShardedJedis getResource() {
     ShardedJedis jedis = super.getResource();
@@ -70,16 +75,25 @@ public class ShardedJedisPool extends Pool<ShardedJedis> {
     private List<JedisShardInfo> shards;
     private Hashing algo;
     private Pattern keyTagPattern;
+    private Boolean isCompatiblePythonRedisShardAPI;
 
     public ShardedJedisFactory(List<JedisShardInfo> shards, Hashing algo, Pattern keyTagPattern) {
       this.shards = shards;
       this.algo = algo;
       this.keyTagPattern = keyTagPattern;
+      this.isCompatiblePythonRedisShardAPI = false;
+    }
+
+    public ShardedJedisFactory(List<JedisShardInfo> shards, Hashing algo, Pattern keyTagPattern,Boolean isCompatiblePythonRedisShardAPI) {
+      this.shards = shards;
+      this.algo = algo;
+      this.keyTagPattern = keyTagPattern;
+      this.isCompatiblePythonRedisShardAPI = isCompatiblePythonRedisShardAPI;
     }
 
     @Override
     public PooledObject<ShardedJedis> makeObject() throws Exception {
-      ShardedJedis jedis = new ShardedJedis(shards, algo, keyTagPattern);
+      ShardedJedis jedis = isCompatiblePythonRedisShardAPI?(new ShardedJedis(shards, algo, keyTagPattern,128)):(new ShardedJedis(shards, algo, keyTagPattern));
       return new DefaultPooledObject<ShardedJedis>(jedis);
     }
 
