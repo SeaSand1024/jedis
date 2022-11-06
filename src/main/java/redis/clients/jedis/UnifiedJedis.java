@@ -10,10 +10,7 @@ import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.json.JSONArray;
 
 import redis.clients.jedis.args.*;
-import redis.clients.jedis.bloom.BFInsertParams;
-import redis.clients.jedis.bloom.BFReserveParams;
-import redis.clients.jedis.bloom.CFInsertParams;
-import redis.clients.jedis.bloom.CFReserveParams;
+import redis.clients.jedis.bloom.*;
 import redis.clients.jedis.commands.JedisCommands;
 import redis.clients.jedis.commands.JedisBinaryCommands;
 import redis.clients.jedis.commands.ProtocolCommand;
@@ -29,12 +26,10 @@ import redis.clients.jedis.json.Path2;
 import redis.clients.jedis.params.*;
 import redis.clients.jedis.providers.*;
 import redis.clients.jedis.resps.*;
-import redis.clients.jedis.search.IndexOptions;
-import redis.clients.jedis.search.Query;
-import redis.clients.jedis.search.Schema;
-import redis.clients.jedis.search.SearchResult;
+import redis.clients.jedis.search.*;
 import redis.clients.jedis.search.aggr.AggregationBuilder;
 import redis.clients.jedis.search.aggr.AggregationResult;
+import redis.clients.jedis.search.schemafields.SchemaField;
 import redis.clients.jedis.timeseries.*;
 import redis.clients.jedis.util.IOUtils;
 import redis.clients.jedis.util.JedisURIHelper;
@@ -91,10 +86,22 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
     this.commandObjects = new CommandObjects();
   }
 
+  /**
+   * The constructor to directly use a custom {@link JedisSocketFactory}.
+   * <p>
+   * WARNING: Using this constructor means a {@link NullPointerException} will be occurred if
+   * {@link UnifiedJedis#provider} is accessed.
+   */
   public UnifiedJedis(JedisSocketFactory socketFactory) {
     this(new Connection(socketFactory));
   }
 
+  /**
+   * The constructor to directly use a {@link Connection}.
+   * <p>
+   * WARNING: Using this constructor means a {@link NullPointerException} will be occurred if
+   * {@link UnifiedJedis#provider} is accessed.
+   */
   public UnifiedJedis(Connection connection) {
     this.provider = null;
     this.executor = new SimpleCommandExecutor(connection);
@@ -136,6 +143,18 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   public UnifiedJedis(ConnectionProvider provider, int maxAttempts, Duration maxTotalRetriesDuration) {
     this.provider = provider;
     this.executor = new RetryableCommandExecutor(provider, maxAttempts, maxTotalRetriesDuration);
+    this.commandObjects = new CommandObjects();
+  }
+
+  /**
+   * The constructor to use a custom {@link CommandExecutor}.
+   * <p>
+   * WARNING: Using this constructor means a {@link NullPointerException} will be occurred if
+   * {@link UnifiedJedis#provider} is accessed.
+   */
+  public UnifiedJedis(CommandExecutor executor) {
+    this.provider = null;
+    this.executor = executor;
     this.commandObjects = new CommandObjects();
   }
 
@@ -571,6 +590,11 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
 
   @Override
+  public String setGet(String key, String value, SetParams params) {
+    return executeCommand(commandObjects.setGet(key, value, params));
+  }
+
+  @Override
   public String getDel(String key) {
     return executeCommand(commandObjects.getDel(key));
   }
@@ -593,6 +617,11 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public byte[] get(byte[] key) {
     return executeCommand(commandObjects.get(key));
+  }
+
+  @Override
+  public byte[] setGet(byte[] key, byte[] value, SetParams params) {
+    return executeCommand(commandObjects.setGet(key, value, params));
   }
 
   @Override
@@ -3423,8 +3452,28 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
 
   @Override
+  public String ftCreate(String indexName, FTCreateParams createParams, Iterable<SchemaField> schemaFields) {
+    return executeCommand(commandObjects.ftCreate(indexName, createParams, schemaFields));
+  }
+
+  @Override
   public String ftAlter(String indexName, Schema schema) {
     return executeCommand(commandObjects.ftAlter(indexName, schema));
+  }
+
+  @Override
+  public String ftAlter(String indexName, Iterable<SchemaField> schemaFields) {
+    return executeCommand(commandObjects.ftAlter(indexName, schemaFields));
+  }
+
+  @Override
+  public SearchResult ftSearch(String indexName, String query) {
+    return executeCommand(commandObjects.ftSearch(indexName, query));
+  }
+
+  @Override
+  public SearchResult ftSearch(String indexName, String query, FTSearchParams params) {
+    return executeCommand(commandObjects.ftSearch(indexName, query, params));
   }
 
   @Override
@@ -3483,8 +3532,53 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
 
   @Override
+  public long ftDictAdd(String dictionary, String... terms) {
+    return executeCommand(commandObjects.ftDictAdd(dictionary, terms));
+  }
+
+  @Override
+  public long ftDictDel(String dictionary, String... terms) {
+    return executeCommand(commandObjects.ftDictDel(dictionary, terms));
+  }
+
+  @Override
+  public Set<String> ftDictDump(String dictionary) {
+    return executeCommand(commandObjects.ftDictDump(dictionary));
+  }
+
+  @Override
+  public long ftDictAddBySampleKey(String indexName, String dictionary, String... terms) {
+    return executeCommand(commandObjects.ftDictAddBySampleKey(indexName, dictionary, terms));
+  }
+
+  @Override
+  public long ftDictDelBySampleKey(String indexName, String dictionary, String... terms) {
+    return executeCommand(commandObjects.ftDictDelBySampleKey(indexName, dictionary, terms));
+  }
+
+  @Override
+  public Set<String> ftDictDumpBySampleKey(String indexName, String dictionary) {
+    return executeCommand(commandObjects.ftDictDumpBySampleKey(indexName, dictionary));
+  }
+
+  @Override
+  public Map<String, Map<String, Double>> ftSpellCheck(String index, String query) {
+    return executeCommand(commandObjects.ftSpellCheck(index, query));
+  }
+
+  @Override
+  public Map<String, Map<String, Double>> ftSpellCheck(String index, String query, FTSpellCheckParams spellCheckParams) {
+    return executeCommand(commandObjects.ftSpellCheck(index, query, spellCheckParams));
+  }
+
+  @Override
   public Map<String, Object> ftInfo(String indexName) {
     return executeCommand(commandObjects.ftInfo(indexName));
+  }
+
+  @Override
+  public Set<String> ftTagVals(String indexName, String fieldName) {
+    return executeCommand(commandObjects.ftTagVals(indexName, fieldName));
   }
 
   @Override
@@ -3521,6 +3615,46 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   public String ftConfigSet(String indexName, String option, String value) {
     return executeCommand(commandObjects.ftConfigSet(indexName, option, value));
   }
+
+  @Override
+  public long ftSugAdd(String key, String string, double score) {
+    return executeCommand(commandObjects.ftSugAdd(key, string, score));
+  }
+
+  @Override
+  public long ftSugAddIncr(String key, String string, double score) {
+    return executeCommand(commandObjects.ftSugAddIncr(key, string, score));
+  }
+
+  @Override
+  public List<String> ftSugGet(String key, String prefix) {
+    return executeCommand(commandObjects.ftSugGet(key, prefix));
+  }
+
+  @Override
+  public List<String> ftSugGet(String key, String prefix, boolean fuzzy, int max) {
+    return executeCommand(commandObjects.ftSugGet(key, prefix, fuzzy, max));
+  }
+
+  @Override
+  public List<Tuple> ftSugGetWithScores(String key, String prefix) {
+    return executeCommand(commandObjects.ftSugGetWithScores(key, prefix));
+  }
+
+  @Override
+  public List<Tuple> ftSugGetWithScores(String key, String prefix, boolean fuzzy, int max) {
+    return executeCommand(commandObjects.ftSugGetWithScores(key, prefix, fuzzy, max));
+  }
+
+  @Override
+  public boolean ftSugDel(String key, String string) {
+    return executeCommand(commandObjects.ftSugDel(key, string));
+  }
+
+  @Override
+  public long ftSugLen(String key) {
+    return executeCommand(commandObjects.ftSugLen(key));
+  }
   // RediSearch commands
 
   // RedisJSON commands
@@ -3537,6 +3671,11 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public String jsonSet(String key, Path path, Object pojo) {
     return executeCommand(commandObjects.jsonSet(key, path, pojo));
+  }
+
+  @Override
+  public String jsonSetWithPlainString(String key, Path path, String string) {
+    return executeCommand(commandObjects.jsonSetWithPlainString(key, path, string));
   }
 
   @Override
@@ -3572,6 +3711,11 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public Object jsonGet(String key, Path... paths) {
     return executeCommand(commandObjects.jsonGet(key, paths));
+  }
+
+  @Override
+  public String jsonGetAsPlainString(String key, Path path) {
+    return executeCommand(commandObjects.jsonGetAsPlainString(key, path));
   }
 
   @Override
@@ -3672,6 +3816,16 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public Long jsonStrLen(String key, Path path) {
     return executeCommand(commandObjects.jsonStrLen(key, path));
+  }
+
+  @Override
+  public JSONArray jsonNumIncrBy(String key, Path2 path, double value) {
+    return executeCommand(commandObjects.jsonNumIncrBy(key, path, value));
+  }
+
+  @Override
+  public double jsonNumIncrBy(String key, Path path, double value) {
+    return executeCommand(commandObjects.jsonNumIncrBy(key, path, value));
   }
 
   @Override
@@ -3783,6 +3937,66 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   public Long jsonArrTrim(String key, Path path, int start, int stop) {
     return executeCommand(commandObjects.jsonArrTrim(key, path, start, stop));
   }
+
+  @Override
+  public Long jsonObjLen(String key) {
+    return executeCommand(commandObjects.jsonObjLen(key));
+  }
+
+  @Override
+  public Long jsonObjLen(String key, Path path) {
+    return executeCommand(commandObjects.jsonObjLen(key, path));
+  }
+
+  @Override
+  public List<Long> jsonObjLen(String key, Path2 path) {
+    return executeCommand(commandObjects.jsonObjLen(key, path));
+  }
+
+  @Override
+  public List<String> jsonObjKeys(String key) {
+    return executeCommand(commandObjects.jsonObjKeys(key));
+  }
+
+  @Override
+  public List<String> jsonObjKeys(String key, Path path) {
+    return executeCommand(commandObjects.jsonObjKeys(key, path));
+  }
+
+  @Override
+  public List<List<String>> jsonObjKeys(String key, Path2 path) {
+    return executeCommand(commandObjects.jsonObjKeys(key, path));
+  }
+
+  @Override
+  public long jsonDebugMemory(String key) {
+    return executeCommand(commandObjects.jsonDebugMemory(key));
+  }
+
+  @Override
+  public long jsonDebugMemory(String key, Path path) {
+    return executeCommand(commandObjects.jsonDebugMemory(key, path));
+  }
+
+  @Override
+  public List<Long> jsonDebugMemory(String key, Path2 path) {
+    return executeCommand(commandObjects.jsonDebugMemory(key, path));
+  }
+
+  @Override
+  public List<Object> jsonResp(String key) {
+    return executeCommand(commandObjects.jsonResp(key));
+  }
+
+  @Override
+  public List<Object> jsonResp(String key, Path path) {
+    return executeCommand(commandObjects.jsonResp(key, path));
+  }
+
+  @Override
+  public List<List<Object>> jsonResp(String key, Path2 path) {
+    return executeCommand(commandObjects.jsonResp(key, path));
+  }
   // RedisJSON commands
 
   // RedisTimeSeries commands
@@ -3819,6 +4033,31 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public long tsAdd(String key, long timestamp, double value, TSCreateParams createParams) {
     return executeCommand(commandObjects.tsAdd(key, timestamp, value, createParams));
+  }
+
+  @Override
+  public List<Long> tsMAdd(Map.Entry<String, TSElement>... entries) {
+    return executeCommand(commandObjects.tsMAdd(entries));
+  }
+
+  @Override
+  public long tsIncrBy(String key, double value) {
+    return executeCommand(commandObjects.tsIncrBy(key, value));
+  }
+
+  @Override
+  public long tsIncrBy(String key, double value, long timestamp) {
+    return executeCommand(commandObjects.tsIncrBy(key, value, timestamp));
+  }
+
+  @Override
+  public long tsDecrBy(String key, double value) {
+    return executeCommand(commandObjects.tsDecrBy(key, value));
+  }
+
+  @Override
+  public long tsDecrBy(String key, double value, long timestamp) {
+    return executeCommand(commandObjects.tsDecrBy(key, value, timestamp));
   }
 
   @Override
@@ -3867,6 +4106,11 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
 
   @Override
+  public TSElement tsGet(String key, TSGetParams getParams) {
+    return executeCommand(commandObjects.tsGet(key, getParams));
+  }
+
+  @Override
   public List<TSKeyValue<TSElement>> tsMGet(TSMGetParams multiGetParams, String... filters) {
     return executeCommand(commandObjects.tsMGet(multiGetParams, filters));
   }
@@ -3877,6 +4121,11 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
 
   @Override
+  public String tsCreateRule(String sourceKey, String destKey, AggregationType aggregationType, long bucketDuration, long alignTimestamp) {
+    return executeCommand(commandObjects.tsCreateRule(sourceKey, destKey, aggregationType, bucketDuration, alignTimestamp));
+  }
+
+  @Override
   public String tsDeleteRule(String sourceKey, String destKey) {
     return executeCommand(commandObjects.tsDeleteRule(sourceKey, destKey));
   }
@@ -3884,6 +4133,16 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public List<String> tsQueryIndex(String... filters) {
     return executeCommand(commandObjects.tsQueryIndex(filters));
+  }
+
+  @Override
+  public TSInfo tsInfo(String key) {
+    return executor.executeCommand(commandObjects.tsInfo(key));
+  }
+
+  @Override
+  public TSInfo tsInfoDebug(String key) {
+    return executeCommand(commandObjects.tsInfoDebug(key));
   }
   // RedisTimeSeries commands
 
@@ -3926,6 +4185,16 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public List<Boolean> bfMExists(String key, String... items) {
     return executeCommand(commandObjects.bfMExists(key, items));
+  }
+
+  @Override
+  public Map.Entry<Long, byte[]> bfScanDump(String key, long iterator) {
+    return executeCommand(commandObjects.bfScanDump(key, iterator));
+  }
+
+  @Override
+  public String bfLoadChunk(String key, long iterator, byte[] data) {
+    return executeCommand(commandObjects.bfLoadChunk(key, iterator, data));
   }
 
   @Override
@@ -3994,6 +4263,16 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   }
 
   @Override
+  public Map.Entry<Long, byte[]> cfScanDump(String key, long iterator) {
+    return executeCommand(commandObjects.cfScanDump(key, iterator));
+  }
+
+  @Override
+  public String cfLoadChunk(String key, long iterator, byte[] data) {
+    return executeCommand(commandObjects.cfLoadChunk(key, iterator, data));
+  }
+
+  @Override
   public Map<String, Object> cfInfo(String key) {
     return executeCommand(commandObjects.cfInfo(key));
   }
@@ -4058,6 +4337,7 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
     return executeCommand(commandObjects.topkQuery(key, items));
   }
 
+  @Deprecated
   @Override
   public List<Long> topkCount(String key, String... items) {
     return executeCommand(commandObjects.topkCount(key, items));
@@ -4071,6 +4351,86 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public Map<String, Object> topkInfo(String key) {
     return executeCommand(commandObjects.topkInfo(key));
+  }
+
+  @Override
+  public String tdigestCreate(String key) {
+    return executeCommand(commandObjects.tdigestCreate(key));
+  }
+
+  @Override
+  public String tdigestCreate(String key, int compression) {
+    return executeCommand(commandObjects.tdigestCreate(key, compression));
+  }
+
+  @Override
+  public String tdigestReset(String key) {
+    return executeCommand(commandObjects.tdigestReset(key));
+  }
+
+  @Override
+  public String tdigestMerge(String destinationKey, String... sourceKeys) {
+    return executeCommand(commandObjects.tdigestMerge(destinationKey, sourceKeys));
+  }
+
+  @Override
+  public String tdigestMerge(TDigestMergeParams mergeParams, String destinationKey, String... sourceKeys) {
+    return executeCommand(commandObjects.tdigestMerge(mergeParams, destinationKey, sourceKeys));
+  }
+
+  @Override
+  public Map<String, Object> tdigestInfo(String key) {
+    return executeCommand(commandObjects.tdigestInfo(key));
+  }
+
+  @Override
+  public String tdigestAdd(String key, double... values) {
+    return executeCommand(commandObjects.tdigestAdd(key, values));
+  }
+
+  @Override
+  public List<Double> tdigestCDF(String key, double... values) {
+    return executeCommand(commandObjects.tdigestCDF(key, values));
+  }
+
+  @Override
+  public List<Double> tdigestQuantile(String key, double... quantiles) {
+    return executeCommand(commandObjects.tdigestQuantile(key, quantiles));
+  }
+
+  @Override
+  public double tdigestMin(String key) {
+    return executeCommand(commandObjects.tdigestMin(key));
+  }
+
+  @Override
+  public double tdigestMax(String key) {
+    return executeCommand(commandObjects.tdigestMax(key));
+  }
+
+  @Override
+  public double tdigestTrimmedMean(String key, double lowCutQuantile, double highCutQuantile) {
+    return executeCommand(commandObjects.tdigestTrimmedMean(key, lowCutQuantile, highCutQuantile));
+  }
+
+  @Override
+  public List<Long> tdigestRank(String key, double... values) {
+    return executeCommand(commandObjects.tdigestRank(key, values));
+  }
+
+  @Override
+  public List<Long> tdigestRevRank(String key, double... values) {
+    return executeCommand(commandObjects.tdigestRevRank(key, values));
+  }
+
+  @Override
+  public List<Double> tdigestByRank(String key, long... ranks) {
+    return executeCommand(commandObjects.tdigestByRank(key, ranks));
+  }
+
+  @Override
+  public List<Double> tdigestByRevRank(String key, long... ranks) {
+    return executeCommand(commandObjects.tdigestByRevRank(key, ranks));
   }
   // RedisBloom commands
 
@@ -4118,6 +4478,36 @@ public class UnifiedJedis implements JedisCommands, JedisBinaryCommands,
   @Override
   public String graphDelete(String name) {
     return executeCommand(graphCommandObjects.graphDelete(name));
+  }
+
+  @Override
+  public List<String> graphList() {
+    return executeCommand(commandObjects.graphList());
+  }
+
+  @Override
+  public List<String> graphProfile(String graphName, String query) {
+    return executeCommand(commandObjects.graphProfile(graphName, query));
+  }
+
+  @Override
+  public List<String> graphExplain(String graphName, String query) {
+    return executeCommand(commandObjects.graphExplain(graphName, query));
+  }
+
+  @Override
+  public List<List<String>> graphSlowlog(String graphName) {
+    return executeCommand(commandObjects.graphSlowlog(graphName));
+  }
+
+  @Override
+  public String graphConfigSet(String configName, Object value) {
+    return executeCommand(commandObjects.graphConfigSet(configName, value));
+  }
+
+  @Override
+  public Map<String, Object> graphConfigGet(String configName) {
+    return executeCommand(commandObjects.graphConfigGet(configName));
   }
   // RedisGraph commands
 

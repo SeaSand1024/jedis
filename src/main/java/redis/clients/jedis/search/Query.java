@@ -7,7 +7,6 @@ import java.util.Map;
 
 import redis.clients.jedis.CommandArguments;
 import redis.clients.jedis.Protocol;
-import redis.clients.jedis.args.Rawable;
 import redis.clients.jedis.params.IParams;
 import redis.clients.jedis.search.SearchProtocol.SearchKeyword;
 import redis.clients.jedis.util.SafeEncoder;
@@ -159,6 +158,10 @@ public class Query implements IParams {
   private String _scorer = null;
   private Map<String, Object> _params = null;
   private int _dialect = 0;
+  private int _slop = -1;
+  private long _timeout = -1;
+  private boolean _inOrder = false;
+  private String _expander = null;
 
   public Query() {
     this("*");
@@ -285,7 +288,7 @@ public class Query implements IParams {
     } else if (returnFieldNames != null && returnFieldNames.length > 0) {
       args.add(SearchKeyword.RETURN.getRaw());
 //      final int returnCountIndex = args.size();
-      DelayedRawable returnCountObject = new DelayedRawable();
+      LazyRawable returnCountObject = new LazyRawable();
 //      args.add(null); // holding a place for setting the total count later.
       args.add(returnCountObject); // holding a place for setting the total count later.
       int returnCount = 0;
@@ -309,19 +312,24 @@ public class Query implements IParams {
       args.add(SearchKeyword.DIALECT.getRaw());
       args.add(_dialect);
     }
-  }
 
-  private static class DelayedRawable implements Rawable {
-
-    private byte[] raw = null;
-
-    public void setRaw(byte[] raw) {
-      this.raw = raw;
+    if (_slop >= 0) {
+      args.add(SearchKeyword.SLOP.getRaw());
+      args.add(_slop);
     }
 
-    @Override
-    public byte[] getRaw() {
-      return raw;
+    if (_timeout >= 0) {
+      args.add(SearchKeyword.TIMEOUT.getRaw());
+      args.add(_timeout);
+    }
+
+    if (_inOrder) {
+      args.add(SearchKeyword.INORDER.getRaw());
+    }
+
+    if (_expander != null) {
+      args.add(SearchKeyword.EXPANDER.getRaw());
+      args.add(SafeEncoder.encode(_expander));
     }
   }
 
@@ -349,7 +357,13 @@ public class Query implements IParams {
     return this;
   }
 
-  /* Set the query payload to be evaluated by the scoring function */
+  /**
+   * Set the query payload to be evaluated by the scoring function
+   *
+   * @return the query object itself
+   * @deprecated Since RediSearch 2.0.0, PAYLOAD option is deprecated.
+   */
+  @Deprecated
   public Query setPayload(byte[] payload) {
     _payload = payload;
     return this;
@@ -412,8 +426,9 @@ public class Query implements IParams {
    * Set the query to return object payloads, if any were given
    *
    * @return the query object itself
-   *
+   * @deprecated Since RediSearch 2.0.0, WITHPAYLOADS option is deprecated.
    */
+  @Deprecated
   public Query setWithPayload() {
     this._withPayloads = true;
     return this;
@@ -563,6 +578,49 @@ public class Query implements IParams {
    */
   public Query dialect(int dialect) {
     _dialect = dialect;
+    return this;
+  }
+
+  /**
+   * Set the slop to execute the query accordingly
+   *
+   * @param slop integer
+   * @return the query object itself
+   */
+  public Query slop(int slop) {
+    _slop = slop;
+    return this;
+  }
+
+  /**
+   * Set the timeout to execute the query accordingly
+   *
+   * @param timeout long
+   * @return the query object itself
+   */
+  public Query timeout(long timeout) {
+    _timeout = timeout;
+    return this;
+  }
+
+  /**
+   * Set the query terms appear in the same order in the document as in the query, regardless of the offsets between them
+   *
+   * @return the query object
+   */
+  public Query setInOrder() {
+    this._inOrder = true;
+    return this;
+  }
+
+  /**
+   * Set the query to use a custom query expander instead of the stemmer
+   *
+   * @param field the expander field's name
+   * @return the query object itself
+   */
+  public Query setExpander(String field) {
+    _expander = field;
     return this;
   }
 }

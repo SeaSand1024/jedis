@@ -18,6 +18,8 @@ import redis.clients.jedis.args.*;
 import redis.clients.jedis.bloom.*;
 import redis.clients.jedis.bloom.RedisBloomProtocol.*;
 import redis.clients.jedis.commands.ProtocolCommand;
+import redis.clients.jedis.graph.GraphProtocol.GraphCommand;
+import redis.clients.jedis.graph.GraphProtocol.GraphKeyword;
 import redis.clients.jedis.json.*;
 import redis.clients.jedis.json.JsonProtocol.JsonCommand;
 import redis.clients.jedis.params.*;
@@ -28,6 +30,7 @@ import redis.clients.jedis.search.SearchProtocol.SearchKeyword;
 import redis.clients.jedis.search.SearchResult.SearchResultBuilder;
 import redis.clients.jedis.search.aggr.AggregationBuilder;
 import redis.clients.jedis.search.aggr.AggregationResult;
+import redis.clients.jedis.search.schemafields.SchemaField;
 import redis.clients.jedis.timeseries.*;
 import redis.clients.jedis.timeseries.TimeSeriesProtocol.TimeSeriesCommand;
 import redis.clients.jedis.timeseries.TimeSeriesProtocol.TimeSeriesKeyword;
@@ -396,6 +399,11 @@ public class CommandObjects {
     return new CommandObject<>(commandArguments(Command.GET).key(key), BuilderFactory.STRING);
   }
 
+  public final CommandObject<String> setGet(String key, String value, SetParams params) {
+    return new CommandObject<>(commandArguments(Command.SET).key(key).add(value).addParams(params)
+        .add(Keyword.GET), BuilderFactory.STRING);
+  }
+
   public final CommandObject<String> getDel(String key) {
     return new CommandObject<>(commandArguments(Command.GETDEL).key(key), BuilderFactory.STRING);
   }
@@ -406,6 +414,11 @@ public class CommandObjects {
 
   public final CommandObject<byte[]> get(byte[] key) {
     return new CommandObject<>(commandArguments(Command.GET).key(key), BuilderFactory.BINARY);
+  }
+
+  public final CommandObject<byte[]> setGet(byte[] key, byte[] value, SetParams params) {
+    return new CommandObject<>(commandArguments(Command.SET).key(key).add(value).addParams(params)
+        .add(Keyword.GET), BuilderFactory.BINARY);
   }
 
   public final CommandObject<byte[]> getDel(byte[] key) {
@@ -1751,7 +1764,7 @@ public class CommandObjects {
   }
 
   public final CommandObject<Set<String>> zdiff(String... keys) {
-    return new CommandObject<>(commandArguments(ZDIFF).add(keys.length).keys((Object[]) keys), BuilderFactory.STRING_SET);
+    return new CommandObject<>(commandArguments(ZDIFF).add(keys.length).keys((Object[]) keys), BuilderFactory.STRING_ORDERED_SET);
   }
 
   public final CommandObject<Set<Tuple>> zdiffWithScores(String... keys) {
@@ -1789,7 +1802,7 @@ public class CommandObjects {
 
   public final CommandObject<Set<String>> zinter(ZParams params, String... keys) {
     return new CommandObject<>(commandArguments(ZINTER).add(keys.length).keys((Object[]) keys)
-        .addParams(params), BuilderFactory.STRING_SET);
+        .addParams(params), BuilderFactory.STRING_ORDERED_SET);
   }
 
   public final CommandObject<Set<Tuple>> zinterWithScores(ZParams params, String... keys) {
@@ -1849,7 +1862,7 @@ public class CommandObjects {
 
   public final CommandObject<Set<String>> zunion(ZParams params, String... keys) {
     return new CommandObject<>(commandArguments(ZUNION).add(keys.length).keys((Object[]) keys)
-        .addParams(params), BuilderFactory.STRING_SET);
+        .addParams(params), BuilderFactory.STRING_ORDERED_SET);
   }
 
   public final CommandObject<Set<Tuple>> zunionWithScores(ZParams params, String... keys) {
@@ -3050,15 +3063,40 @@ public class CommandObjects {
   public CommandObject<String> ftCreate(String indexName, IndexOptions indexOptions, Schema schema) {
     CommandArguments args = commandArguments(SearchCommand.CREATE).add(indexName)
         .addParams(indexOptions).add(SearchKeyword.SCHEMA);
-    schema.fields.forEach(field -> field.addParams(args));
+    schema.fields.forEach(field -> args.addParams(field));
+    return new CommandObject<>(args, BuilderFactory.STRING);
+  }
+
+  public CommandObject<String> ftCreate(String indexName, FTCreateParams createParams,
+      Iterable<SchemaField> schemaFields) {
+    CommandArguments args = commandArguments(SearchCommand.CREATE).add(indexName)
+        .addParams(createParams).add(SearchKeyword.SCHEMA);
+    schemaFields.forEach(field -> args.addParams(field));
     return new CommandObject<>(args, BuilderFactory.STRING);
   }
 
   public CommandObject<String> ftAlter(String indexName, Schema schema) {
     CommandArguments args = commandArguments(SearchCommand.ALTER).add(indexName)
         .add(SearchKeyword.SCHEMA).add(SearchKeyword.ADD);
-    schema.fields.forEach(field -> field.addParams(args));
+    schema.fields.forEach(field -> args.addParams(field));
     return new CommandObject<>(args, BuilderFactory.STRING);
+  }
+
+  public CommandObject<String> ftAlter(String indexName, Iterable<SchemaField> schemaFields) {
+    CommandArguments args = commandArguments(SearchCommand.ALTER).add(indexName)
+        .add(SearchKeyword.SCHEMA).add(SearchKeyword.ADD);
+    schemaFields.forEach(field -> args.addParams(field));
+    return new CommandObject<>(args, BuilderFactory.STRING);
+  }
+
+  public CommandObject<SearchResult> ftSearch(String indexName, String query) {
+    return new CommandObject<>(commandArguments(SearchCommand.SEARCH).add(indexName).add(query),
+        new SearchResultBuilder(true, false, false, true));
+  }
+
+  public CommandObject<SearchResult> ftSearch(String indexName, String query, FTSearchParams params) {
+    return new CommandObject<>(commandArguments(SearchCommand.SEARCH).add(indexName).add(query).addParams(params),
+        new SearchResultBuilder(!params.getNoContent(), params.getWithScores(), false, true));
   }
 
   public CommandObject<SearchResult> ftSearch(String indexName, Query query) {
@@ -3111,8 +3149,47 @@ public class CommandObjects {
     return new CommandObject<>(commandArguments(SearchCommand.SYNDUMP).add(indexName), BuilderFactory.SEARCH_SYNONYM_GROUPS);
   }
 
+  public final CommandObject<Long> ftDictAdd(String dictionary, String... terms) {
+    return new CommandObject<>(commandArguments(SearchCommand.DICTADD).add(dictionary).addObjects((Object[]) terms), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Long> ftDictDel(String dictionary, String... terms) {
+    return new CommandObject<>(commandArguments(SearchCommand.DICTDEL).add(dictionary).addObjects((Object[]) terms), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Set<String>> ftDictDump(String dictionary) {
+    return new CommandObject<>(commandArguments(SearchCommand.DICTDUMP).add(dictionary), BuilderFactory.STRING_SET);
+  }
+
+  public final CommandObject<Long> ftDictAddBySampleKey(String indexName, String dictionary, String... terms) {
+    return addProcessKey(ftDictAdd(dictionary, terms), indexName);
+  }
+
+  public final CommandObject<Long> ftDictDelBySampleKey(String indexName, String dictionary, String... terms) {
+    return addProcessKey(ftDictDel(dictionary, terms), indexName);
+  }
+
+  public final CommandObject<Set<String>> ftDictDumpBySampleKey(String indexName, String dictionary) {
+    return addProcessKey(ftDictDump(dictionary), indexName);
+  }
+
+  public final CommandObject<Map<String, Map<String, Double>>> ftSpellCheck(String index, String query) {
+    return new CommandObject<>(commandArguments(SearchCommand.SPELLCHECK).key(index).add(query),
+        BuilderFactory.SEARCH_SPELLCHECK_RESPONSE);
+  }
+
+  public final CommandObject<Map<String, Map<String, Double>>> ftSpellCheck(String index, String query,
+      FTSpellCheckParams spellCheckParams) {
+    return new CommandObject<>(commandArguments(SearchCommand.SPELLCHECK).key(index).add(query)
+        .addParams(spellCheckParams), BuilderFactory.SEARCH_SPELLCHECK_RESPONSE);
+  }
+
   public CommandObject<Map<String, Object>> ftInfo(String indexName) {
     return new CommandObject<>(commandArguments(SearchCommand.INFO).add(indexName), BuilderFactory.ENCODED_OBJECT_MAP);
+  }
+
+  public CommandObject<Set<String>> ftTagVals(String indexName, String fieldName) {
+    return new CommandObject<>(commandArguments(SearchCommand.TAGVALS).add(indexName).add(fieldName), BuilderFactory.STRING_SET);
   }
 
   public CommandObject<String> ftAliasAdd(String aliasName, String indexName) {
@@ -3142,6 +3219,45 @@ public class CommandObjects {
   public CommandObject<String> ftConfigSet(String indexName, String option, String value) {
     return ftConfigSet(option, value);
   }
+
+  public final CommandObject<Long> ftSugAdd(String key, String string, double score) {
+    return new CommandObject<>(commandArguments(SearchCommand.SUGADD).key(key).add(string).add(score), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Long> ftSugAddIncr(String key, String string, double score) {
+    return new CommandObject<>(commandArguments(SearchCommand.SUGADD).key(key).add(string).add(score).add(SearchKeyword.INCR), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<List<String>> ftSugGet(String key, String prefix) {
+    return new CommandObject<>(commandArguments(SearchCommand.SUGGET).key(key).add(prefix), BuilderFactory.STRING_LIST);
+  }
+
+  public final CommandObject<List<String>> ftSugGet(String key, String prefix, boolean fuzzy, int max) {
+    CommandArguments args = commandArguments(SearchCommand.SUGGET).key(key).add(prefix);
+    if (fuzzy) args.add(SearchKeyword.FUZZY);
+    args.add(SearchKeyword.MAX).add(max);
+    return new CommandObject<>(args, BuilderFactory.STRING_LIST);
+  }
+
+  public final CommandObject<List<Tuple>> ftSugGetWithScores(String key, String prefix) {
+    return new CommandObject<>(commandArguments(SearchCommand.SUGGET).key(key).add(prefix).add(SearchKeyword.WITHSCORES), BuilderFactory.TUPLE_LIST);
+  }
+
+  public final CommandObject<List<Tuple>> ftSugGetWithScores(String key, String prefix, boolean fuzzy, int max) {
+    CommandArguments args = commandArguments(SearchCommand.SUGGET).key(key).add(prefix);
+    if (fuzzy) args.add(SearchKeyword.FUZZY);
+    args.add(SearchKeyword.MAX).add(max);
+    args.add(SearchKeyword.WITHSCORES);
+    return new CommandObject<>(args, BuilderFactory.TUPLE_LIST);
+  }
+
+  public final CommandObject<Boolean> ftSugDel(String key, String string) {
+    return new CommandObject<>(commandArguments(SearchCommand.SUGDEL).key(key).add(string), BuilderFactory.BOOLEAN);
+  }
+
+  public final CommandObject<Long> ftSugLen(String key) {
+    return new CommandObject<>(commandArguments(SearchCommand.SUGLEN).key(key), BuilderFactory.LONG);
+  }
   // RediSearch commands
 
   // RedisJSON commands
@@ -3155,6 +3271,10 @@ public class CommandObjects {
 
   public final CommandObject<String> jsonSet(String key, Path path, Object pojo) {
     return new CommandObject<>(commandArguments(JsonCommand.SET).key(key).add(path).add(GSON.toJson(pojo)), BuilderFactory.STRING);
+  }
+
+  public final CommandObject<String> jsonSetWithPlainString(String key, Path path, String string) {
+    return new CommandObject<>(commandArguments(JsonCommand.SET).key(key).add(path).add(string), BuilderFactory.STRING);
   }
 
   public final CommandObject<String> jsonSet(String key, Path2 path, Object object, JsonSetParams params) {
@@ -3183,6 +3303,10 @@ public class CommandObjects {
 
   public final CommandObject<Object> jsonGet(String key, Path... paths) {
     return new CommandObject<>(commandArguments(JsonCommand.GET).key(key).addObjects((Object[]) paths), new GsonObjectBuilder<>(Object.class));
+  }
+
+  public final CommandObject<String> jsonGetAsPlainString(String key, Path path) {
+    return new CommandObject<>(commandArguments(JsonCommand.GET).key(key).add(path), BuilderFactory.STRING);
   }
 
   public final <T> CommandObject<T> jsonGet(String key, Class<T> clazz, Path... paths) {
@@ -3263,6 +3387,14 @@ public class CommandObjects {
 
   public final CommandObject<Long> jsonStrLen(String key, Path path) {
     return new CommandObject<>(commandArguments(JsonCommand.STRLEN).key(key).add(path), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<JSONArray> jsonNumIncrBy(String key, Path2 path, double value) {
+    return new CommandObject<>(commandArguments(JsonCommand.NUMINCRBY).key(key).add(path).add(value), BuilderFactory.JSON_ARRAY);
+  }
+
+  public final CommandObject<Double> jsonNumIncrBy(String key, Path path, double value) {
+    return new CommandObject<>(commandArguments(JsonCommand.NUMINCRBY).key(key).add(path).add(value), BuilderFactory.DOUBLE);
   }
 
   public final CommandObject<Long> jsonArrAppend(String key, String path, JSONObject... objects) {
@@ -3378,6 +3510,54 @@ public class CommandObjects {
   public final CommandObject<Long> jsonArrTrim(String key, Path path, int start, int stop) {
     return new CommandObject<>(commandArguments(JsonCommand.ARRTRIM).key(key).add(path).add(start).add(stop), BuilderFactory.LONG);
   }
+
+  public final CommandObject<Long> jsonObjLen(String key) {
+    return new CommandObject<>(commandArguments(JsonCommand.OBJLEN).key(key), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Long> jsonObjLen(String key, Path path) {
+    return new CommandObject<>(commandArguments(JsonCommand.OBJLEN).key(key).add(path), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<List<Long>> jsonObjLen(String key, Path2 path) {
+    return new CommandObject<>(commandArguments(JsonCommand.OBJLEN).key(key).add(path), BuilderFactory.LONG_LIST);
+  }
+
+  public final CommandObject<List<String>> jsonObjKeys(String key) {
+    return new CommandObject<>(commandArguments(JsonCommand.OBJKEYS).key(key), BuilderFactory.STRING_LIST);
+  }
+
+  public final CommandObject<List<String>> jsonObjKeys(String key, Path path) {
+    return new CommandObject<>(commandArguments(JsonCommand.OBJKEYS).key(key).add(path), BuilderFactory.STRING_LIST);
+  }
+
+  public final CommandObject<List<List<String>>> jsonObjKeys(String key, Path2 path) {
+    return new CommandObject<>(commandArguments(JsonCommand.OBJKEYS).key(key).add(path), BuilderFactory.STRING_LIST_LIST);
+  }
+
+  public final CommandObject<Long> jsonDebugMemory(String key) {
+    return new CommandObject<>(commandArguments(JsonCommand.DEBUG).add("MEMORY").key(key), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Long> jsonDebugMemory(String key, Path path) {
+    return new CommandObject<>(commandArguments(JsonCommand.DEBUG).add("MEMORY").key(key).add(path), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<List<Long>> jsonDebugMemory(String key, Path2 path) {
+    return new CommandObject<>(commandArguments(JsonCommand.DEBUG).add("MEMORY").key(key).add(path), BuilderFactory.LONG_LIST);
+  }
+
+  public final CommandObject<List<Object>> jsonResp(String key) {
+    return new CommandObject<>(commandArguments(JsonCommand.RESP).key(key), BuilderFactory.ENCODED_OBJECT_LIST);
+  }
+
+  public final CommandObject<List<Object>> jsonResp(String key, Path path) {
+    return new CommandObject<>(commandArguments(JsonCommand.RESP).key(key).add(path), BuilderFactory.ENCODED_OBJECT_LIST);
+  }
+
+  public final CommandObject<List<List<Object>>> jsonResp(String key, Path2 path) {
+    return new CommandObject<>(commandArguments(JsonCommand.RESP).key(key).add(path), BuilderFactory.ENCODED_OBJECT_LIST_LIST);
+  }
   // RedisJSON commands
 
   // RedisTimeSeries commands
@@ -3399,18 +3579,42 @@ public class CommandObjects {
   }
 
   public final CommandObject<Long> tsAdd(String key, double value) {
-    return new CommandObject<>(commandArguments(TimeSeriesCommand.ADD).key(key)
-        .add(Protocol.BYTES_ASTERISK).add(value), BuilderFactory.LONG);
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.ADD).key(key).add(Protocol.BYTES_ASTERISK).add(value), BuilderFactory.LONG);
   }
 
   public final CommandObject<Long> tsAdd(String key, long timestamp, double value) {
-    return new CommandObject<>(commandArguments(TimeSeriesCommand.ADD).key(key)
-        .add(timestamp).add(value), BuilderFactory.LONG);
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.ADD).key(key).add(timestamp).add(value), BuilderFactory.LONG);
   }
 
   public final CommandObject<Long> tsAdd(String key, long timestamp, double value, TSCreateParams createParams) {
     return new CommandObject<>(commandArguments(TimeSeriesCommand.ADD).key(key)
         .add(timestamp).add(value).addParams(createParams), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<List<Long>> tsMAdd(Map.Entry<String, TSElement>... entries) {
+    CommandArguments args = commandArguments(TimeSeriesCommand.MADD);
+    for (Map.Entry<String, TSElement> entry : entries) {
+      args.key(entry.getKey()).add(entry.getValue().getTimestamp()).add(entry.getValue().getValue());
+    }
+    return new CommandObject<>(args, BuilderFactory.LONG_LIST);
+  }
+
+  public final CommandObject<Long> tsIncrBy(String key, double value) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.INCRBY).key(key).add(value), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Long> tsIncrBy(String key, double value, long timestamp) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.INCRBY).key(key).add(value)
+        .add(TimeSeriesKeyword.TIMESTAMP).add(timestamp), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Long> tsDecrBy(String key, double value) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.DECRBY).key(key).add(value), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Long> tsDecrBy(String key, double value, long timestamp) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.DECRBY).key(key).add(value)
+        .add(TimeSeriesKeyword.TIMESTAMP).add(timestamp), BuilderFactory.LONG);
   }
 
   public final CommandObject<List<TSElement>> tsRange(String key, long fromTimestamp, long toTimestamp) {
@@ -3459,15 +3663,25 @@ public class CommandObjects {
     return new CommandObject<>(commandArguments(TimeSeriesCommand.GET).key(key), BuilderFactory.TIMESERIES_ELEMENT);
   }
 
+  public final CommandObject<TSElement> tsGet(String key, TSGetParams getParams) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.GET).key(key).addParams(getParams), BuilderFactory.TIMESERIES_ELEMENT);
+  }
+
   public final CommandObject<List<TSKeyValue<TSElement>>> tsMGet(TSMGetParams multiGetParams, String... filters) {
     return new CommandObject<>(commandArguments(TimeSeriesCommand.MGET).addParams(multiGetParams)
         .add(TimeSeriesKeyword.FILTER).addObjects((Object[]) filters), BuilderFactory.TIMESERIES_MGET_RESPONSE);
   }
 
-  public final CommandObject<String> tsCreateRule(String sourceKey, String destKey,
-      AggregationType aggregationType, long timeBucket) {
+  public final CommandObject<String> tsCreateRule(String sourceKey, String destKey, AggregationType aggregationType,
+      long timeBucket) {
     return new CommandObject<>(commandArguments(TimeSeriesCommand.CREATERULE).key(sourceKey).key(destKey)
         .add(TimeSeriesKeyword.AGGREGATION).add(aggregationType).add(timeBucket), BuilderFactory.STRING);
+  }
+
+  public final CommandObject<String> tsCreateRule(String sourceKey, String destKey, AggregationType aggregationType,
+      long bucketDuration, long alignTimestamp) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.CREATERULE).key(sourceKey).key(destKey)
+        .add(TimeSeriesKeyword.AGGREGATION).add(aggregationType).add(bucketDuration).add(alignTimestamp), BuilderFactory.STRING);
   }
 
   public final CommandObject<String> tsDeleteRule(String sourceKey, String destKey) {
@@ -3477,6 +3691,14 @@ public class CommandObjects {
   public final CommandObject<List<String>> tsQueryIndex(String... filters) {
     return new CommandObject<>(commandArguments(TimeSeriesCommand.QUERYINDEX)
         .addObjects((Object[]) filters), BuilderFactory.STRING_LIST);
+  }
+
+  public final CommandObject<TSInfo> tsInfo(String key) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.INFO).key(key), TSInfo.TIMESERIES_INFO);
+  }
+
+  public final CommandObject<TSInfo> tsInfoDebug(String key) {
+    return new CommandObject<>(commandArguments(TimeSeriesCommand.INFO).key(key).add(TimeSeriesKeyword.DEBUG), TSInfo.TIMESERIES_INFO);
   }
   // RedisTimeSeries commands
 
@@ -3517,6 +3739,14 @@ public class CommandObjects {
   public final CommandObject<List<Boolean>> bfMExists(String key, String... items) {
     return new CommandObject<>(commandArguments(BloomFilterCommand.MEXISTS).key(key).
         addObjects((Object[]) items), BuilderFactory.BOOLEAN_LIST);
+  }
+
+  public final CommandObject<Map.Entry<Long, byte[]>> bfScanDump(String key, long iterator) {
+    return new CommandObject<>(commandArguments(BloomFilterCommand.SCANDUMP).key(key).add(iterator), BuilderFactory.BLOOM_SCANDUMP_RESPONSE);
+  }
+
+  public final CommandObject<String> bfLoadChunk(String key, long iterator, byte[] data) {
+    return new CommandObject<>(commandArguments(BloomFilterCommand.LOADCHUNK).key(key).add(iterator).add(data), BuilderFactory.STRING);
   }
 
   public final CommandObject<Map<String, Object>> bfInfo(String key) {
@@ -3574,6 +3804,14 @@ public class CommandObjects {
 
   public final CommandObject<Long> cfCount(String key, String item) {
     return new CommandObject<>(commandArguments(CuckooFilterCommand.COUNT).key(key).add(item), BuilderFactory.LONG);
+  }
+
+  public final CommandObject<Map.Entry<Long, byte[]>> cfScanDump(String key, long iterator) {
+    return new CommandObject<>(commandArguments(CuckooFilterCommand.SCANDUMP).key(key).add(iterator), BuilderFactory.BLOOM_SCANDUMP_RESPONSE);
+  }
+
+  public final CommandObject<String> cfLoadChunk(String key, long iterator, byte[] data) {
+    return new CommandObject<>(commandArguments(CuckooFilterCommand.LOADCHUNK).key(key).add(iterator).add(data), BuilderFactory.STRING);
   }
 
   public final CommandObject<Map<String, Object>> cfInfo(String key) {
@@ -3650,7 +3888,109 @@ public class CommandObjects {
   public final CommandObject<Map<String, Object>> topkInfo(String key) {
     return new CommandObject<>(commandArguments(TopKCommand.INFO).key(key), BuilderFactory.ENCODED_OBJECT_MAP);
   }
+
+  public final CommandObject<String> tdigestCreate(String key) {
+    return new CommandObject<>(commandArguments(TDigestCommand.CREATE).key(key), BuilderFactory.STRING);
+  }
+
+  public final CommandObject<String> tdigestCreate(String key, int compression) {
+    return new CommandObject<>(commandArguments(TDigestCommand.CREATE).key(key).add(RedisBloomKeyword.COMPRESSION)
+        .add(compression), BuilderFactory.STRING);
+  }
+
+  public final CommandObject<String> tdigestReset(String key) {
+    return new CommandObject<>(commandArguments(TDigestCommand.RESET).key(key), BuilderFactory.STRING);
+  }
+
+  public final CommandObject<String> tdigestMerge(String destinationKey, String... sourceKeys) {
+    return new CommandObject<>(commandArguments(TDigestCommand.MERGE).key(destinationKey)
+        .add(sourceKeys.length).keys((Object[]) sourceKeys), BuilderFactory.STRING);
+  }
+
+  public final CommandObject<String> tdigestMerge(TDigestMergeParams mergeParams,
+      String destinationKey, String... sourceKeys) {
+    return new CommandObject<>(commandArguments(TDigestCommand.MERGE).key(destinationKey)
+        .add(sourceKeys.length).keys((Object[]) sourceKeys).addParams(mergeParams), BuilderFactory.STRING);
+  }
+
+  public final CommandObject<Map<String, Object>> tdigestInfo(String key) {
+    return new CommandObject<>(commandArguments(TDigestCommand.INFO).key(key), BuilderFactory.ENCODED_OBJECT_MAP);
+  }
+
+  public final CommandObject<String> tdigestAdd(String key, double... values) {
+    return new CommandObject<>(addFlatArgs(commandArguments(TDigestCommand.ADD).key(key), values),
+        BuilderFactory.STRING);
+  }
+
+  public final CommandObject<List<Double>> tdigestCDF(String key, double... values) {
+    return new CommandObject<>(addFlatArgs(commandArguments(TDigestCommand.CDF).key(key), values),
+        BuilderFactory.DOUBLE_LIST);
+  }
+
+  public final CommandObject<List<Double>> tdigestQuantile(String key, double... quantiles) {
+    return new CommandObject<>(addFlatArgs(commandArguments(TDigestCommand.QUANTILE).key(key),
+        quantiles), BuilderFactory.DOUBLE_LIST);
+  }
+
+  public final CommandObject<Double> tdigestMin(String key) {
+    return new CommandObject<>(commandArguments(TDigestCommand.MIN).key(key), BuilderFactory.DOUBLE);
+  }
+
+  public final CommandObject<Double> tdigestMax(String key) {
+    return new CommandObject<>(commandArguments(TDigestCommand.MAX).key(key), BuilderFactory.DOUBLE);
+  }
+
+  public final CommandObject<Double> tdigestTrimmedMean(String key, double lowCutQuantile, double highCutQuantile) {
+    return new CommandObject<>(commandArguments(TDigestCommand.TRIMMED_MEAN).key(key).add(lowCutQuantile)
+        .add(highCutQuantile), BuilderFactory.DOUBLE);
+  }
+
+  public final CommandObject<List<Long>> tdigestRank(String key, double... values) {
+    return new CommandObject<>(addFlatArgs(commandArguments(TDigestCommand.RANK).key(key),
+        values), BuilderFactory.LONG_LIST);
+  }
+
+  public final CommandObject<List<Long>> tdigestRevRank(String key, double... values) {
+    return new CommandObject<>(addFlatArgs(commandArguments(TDigestCommand.REVRANK).key(key),
+        values), BuilderFactory.LONG_LIST);
+  }
+
+  public final CommandObject<List<Double>> tdigestByRank(String key, long... ranks) {
+    return new CommandObject<>(addFlatArgs(commandArguments(TDigestCommand.BYRANK).key(key),
+        ranks), BuilderFactory.DOUBLE_LIST);
+  }
+
+  public final CommandObject<List<Double>> tdigestByRevRank(String key, long... ranks) {
+    return new CommandObject<>(addFlatArgs(commandArguments(TDigestCommand.BYREVRANK).key(key),
+        ranks), BuilderFactory.DOUBLE_LIST);
+  }
   // RedisBloom commands
+
+  // RedisGraph commands
+  public final CommandObject<List<String>> graphList() {
+    return new CommandObject<>(commandArguments(GraphCommand.LIST), BuilderFactory.STRING_LIST);
+  }
+
+  public final CommandObject<List<String>> graphProfile(String graphName, String query) {
+    return new CommandObject<>(commandArguments(GraphCommand.PROFILE).key(graphName).add(query), BuilderFactory.STRING_LIST);
+  }
+
+  public final CommandObject<List<String>> graphExplain(String graphName, String query) {
+    return new CommandObject<>(commandArguments(GraphCommand.EXPLAIN).key(graphName).add(query), BuilderFactory.STRING_LIST);
+  }
+
+  public final CommandObject<List<List<String>>> graphSlowlog(String graphName) {
+    return new CommandObject<>(commandArguments(GraphCommand.SLOWLOG).key(graphName), BuilderFactory.STRING_LIST_LIST);
+  }
+
+  public final CommandObject<String> graphConfigSet(String configName, Object value) {
+    return new CommandObject<>(commandArguments(GraphCommand.CONFIG).add(GraphKeyword.SET).add(configName).add(value), BuilderFactory.STRING);
+  }
+
+  public final CommandObject<Map<String, Object>> graphConfigGet(String configName) {
+    return new CommandObject<>(commandArguments(GraphCommand.CONFIG).add(GraphKeyword.GET).add(configName), BuilderFactory.ENCODED_OBJECT_MAP);
+  }
+  // RedisGraph commands
 
   private static final Gson GSON = new Gson();
 
@@ -3684,6 +4024,20 @@ public class CommandObjects {
       List<String> list = BuilderFactory.STRING_LIST.build(data);
       return list.stream().map(s -> GSON.fromJson(s, clazz)).collect(Collectors.toList());
     }
+  }
+
+  private CommandArguments addFlatArgs(CommandArguments args, long... values) {
+    for (long value : values) {
+      args.add(value);
+    }
+    return args;
+  }
+
+  private CommandArguments addFlatArgs(CommandArguments args, double... values) {
+    for (double value : values) {
+      args.add(value);
+    }
+    return args;
   }
 
   private CommandArguments addFlatKeyValueArgs(CommandArguments args, String... keyvalues) {
@@ -3724,5 +4078,10 @@ public class CommandObjects {
       args.add(entry.getKey());
     }
     return args;
+  }
+
+  private <T> CommandObject<T> addProcessKey(CommandObject<T> object, String sampleKey) {
+    object.getArguments().processKey(sampleKey);
+    return object;
   }
 }

@@ -13,13 +13,16 @@
 
 Jedis is a Java client for [Redis](https://github.com/redis/redis "Redis") designed for performance and ease of use.
 
+Are you looking for a high-level library to handle object mapping? See [redis-om-spring](https://github.com/redis/redis-om-spring)!
+
 ## Contributing
 
 We'd love your contributions!
 
 **Bug reports** are always welcome! [You can open a bug report on GitHub](https://github.com/redis/jedis/issues/new).
 
-You can also **contribute documentation** -- or anything to improve Jedis. Please see [contribution guideline](https://github.com/redis/jedis/blob/master/.github/CONTRIBUTING.md) for more details.
+You can also **contribute documentation** -- or anything to improve Jedis. Please see
+[contribution guideline](https://github.com/redis/jedis/blob/master/.github/CONTRIBUTING.md) for more details.
 
 ## Getting started
 
@@ -29,7 +32,7 @@ To get started with Jedis, first add it as a dependency in your Java project. If
 <dependency>
     <groupId>redis.clients</groupId>
     <artifactId>jedis</artifactId>
-    <version>4.2.0</version>
+    <version>4.3.0</version>
 </dependency>
 ```
 
@@ -39,7 +42,9 @@ Next, you'll need to connect to Redis. For many applications, it's best to use a
 JedisPool pool = new JedisPool("localhost", 6379);
 ```
 
-Once you have a `JedisPool` instance, you can use a [try-with-resources](https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html) block to get a connection and run Redis commands.
+With a `JedisPool` instance, you can use a
+[try-with-resources](https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html)
+block to get a connection and run Redis commands.
 
 Here's how to run a single [SET](https://redis.io/commands/set) command within a *try-with-resources* block:
 
@@ -49,7 +54,9 @@ try (Jedis jedis = pool.getResource()) {
 }
 ```
 
-`Jedis` instances implement most Redis commands. See the [Jedis Javadocs](https://www.javadoc.io/doc/redis.clients/jedis/latest/redis/clients/jedis/Jedis.html) for a complete list of supported commands.
+`Jedis` instances implement most Redis commands. See the
+[Jedis Javadocs](https://www.javadoc.io/doc/redis.clients/jedis/latest/redis/clients/jedis/Jedis.html)
+for the complete list of supported commands.
 
 ### Easier way of using connection pool
 
@@ -67,7 +74,8 @@ jedis.sadd("planets", "Venus");
 
 ## Connecting to a Redis cluster
 
-Jedis lets you connect to Redis Clusters, supporting the [Redis Cluster Specification](https://redis.io/topics/cluster-spec). To do this, you'll need to connect using `JedisCluster`. See the example below:
+Jedis lets you connect to Redis Clusters, supporting the [Redis Cluster Specification](https://redis.io/topics/cluster-spec).
+To do this, you'll need to connect using `JedisCluster`. See the example below:
 
 ```java
 Set<HostAndPort> jedisClusterNodes = new HashSet<HostAndPort>();
@@ -84,9 +92,10 @@ jedis.sadd("planets", "Mars");
 
 ## Using Redis modules
 
-Jedis provides support for some of the [Redis modules](https://redis.io/docs/modules/), most notably [RedisJSON](https://oss.redis.com/redisjson/) and [RediSearch](https://oss.redis.com/redisearch/).
+Jedis includes support for [Redis modules](https://redis.io/docs/modules/) such as
+[RedisJSON](https://oss.redis.com/redisjson/) and [RediSearch](https://oss.redis.com/redisearch/).
 
-See the [RedisJSON Jedis Quick Start](docs/redisjson.md) for details.
+See the [RedisJSON Jedis](docs/redisjson.md) or [RediSearch Jedis](docs/redisearch.md) for details.
 
 ## Documentation
 
@@ -100,7 +109,8 @@ If you run into trouble or have any questions, we're here to help!
 
 Hit us up on the [Redis Discord Server](http://discord.gg/redis) or [open an issue on GitHub](https://github.com/redis/jedis).
 
-You can also find help on the [Jedis mailing list](http://groups.google.com/group/jedis_redis) or the [GitHub Discussions](https://github.com/redis/jedis/discussions).
+You can also find help on the [Jedis mailing list](http://groups.google.com/group/jedis_redis) or the
+[GitHub Discussions](https://github.com/redis/jedis/discussions).
 
 ## License
 

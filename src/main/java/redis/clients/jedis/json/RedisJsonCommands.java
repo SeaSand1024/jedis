@@ -2,7 +2,6 @@ package redis.clients.jedis.json;
 
 import java.util.List;
 import org.json.JSONArray;
-import org.json.JSONObject;
 
 public interface RedisJsonCommands {
 
@@ -36,6 +35,8 @@ public interface RedisJsonCommands {
 
   String jsonSet(String key, Path path, Object pojo);
 
+  String jsonSetWithPlainString(String key, Path path, String string);
+
   String jsonSet(String key, Path2 path, Object object, JsonSetParams params);
 
   String jsonSetWithEscape(String key, Path2 path, Object object, JsonSetParams params);
@@ -49,6 +50,8 @@ public interface RedisJsonCommands {
   Object jsonGet(String key, Path2... paths);
 
   Object jsonGet(String key, Path... paths);
+
+  String jsonGetAsPlainString(String key, Path path);
 
   <T> T jsonGet(String key, Class<T> clazz, Path... paths);
 
@@ -98,6 +101,10 @@ public interface RedisJsonCommands {
 
   Long jsonStrLen(String key, Path path);
 
+  JSONArray jsonNumIncrBy(String key, Path2 path, double value);
+
+  double jsonNumIncrBy(String key, Path path, double value);
+
   List<Long> jsonArrAppend(String key, Path2 path, Object... objects);
 
   List<Long> jsonArrAppendWithEscape(String key, Path2 path, Object... objects);
@@ -141,4 +148,28 @@ public interface RedisJsonCommands {
   List<Long> jsonArrTrim(String key, Path2 path, int start, int stop);
 
   Long jsonArrTrim(String key, Path path, int start, int stop);
+
+  Long jsonObjLen(String key);
+
+  Long jsonObjLen(String key, Path path);
+
+  List<Long> jsonObjLen(String key, Path2 path);
+
+  List<String> jsonObjKeys(String key);
+
+  List<String> jsonObjKeys(String key, Path path);
+
+  List<List<String>> jsonObjKeys(String key, Path2 path);
+
+  long jsonDebugMemory(String key);
+
+  long jsonDebugMemory(String key, Path path);
+
+  List<Long> jsonDebugMemory(String key, Path2 path);
+
+  List<Object> jsonResp(String key);
+
+  List<Object> jsonResp(String key, Path path);
+
+  List<List<Object>> jsonResp(String key, Path2 path);
 }

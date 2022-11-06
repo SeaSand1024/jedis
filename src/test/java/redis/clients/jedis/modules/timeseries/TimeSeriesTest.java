@@ -2,6 +2,7 @@ package redis.clients.jedis.modules.timeseries;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -9,9 +10,11 @@ import static org.junit.Assert.fail;
 import java.util.*;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.modules.RedisModuleCommandsTestBase;
 import redis.clients.jedis.timeseries.*;
+import redis.clients.jedis.util.KeyValue;
 
 public class TimeSeriesTest extends RedisModuleCommandsTestBase {
 
@@ -85,6 +88,29 @@ public class TimeSeriesTest extends RedisModuleCommandsTestBase {
       fail();
     } catch (JedisDataException e) {
     }
+  }
+
+  @Test
+  public void testAlter() {
+    Map<String, String> labels = new HashMap<>();
+    labels.put("l1", "v1");
+    labels.put("l2", "v2");
+    assertEquals("OK", client.tsCreate("seriesAlter", TSCreateParams.createParams().retention(60000).labels(labels)));
+    assertEquals(Collections.emptyList(), client.tsQueryIndex("l2=v22"));
+
+    labels.put("l1", "v11");
+    labels.remove("l2");
+    labels.put("l3", "v33");
+    assertEquals("OK", client.tsAlter("seriesAlter", TSAlterParams.alterParams().retention(15000).chunkSize(8192)
+        .duplicatePolicy(DuplicatePolicy.SUM).labels(labels)));
+
+    TSInfo info = client.tsInfo("seriesAlter");
+    assertEquals(Long.valueOf(15000), info.getProperty("retentionTime"));
+    assertEquals(Long.valueOf(8192), info.getProperty("chunkSize"));
+    assertEquals(DuplicatePolicy.SUM, info.getProperty("duplicatePolicy"));
+    assertEquals("v11", info.getLabel("l1"));
+    assertNull(info.getLabel("l2"));
+    assertEquals("v33", info.getLabel("l3"));
   }
 
   @Test
@@ -321,62 +347,58 @@ public class TimeSeriesTest extends RedisModuleCommandsTestBase {
     List<TSElement> values = client.tsRange("seriesAdd2", startTime, add3);
     assertEquals(3, values.size());
   }
-//
-//  @Test
-//  public void testMadd() {
-//    Map<String, String> labels = new HashMap<>();
-//    labels.put("l1", "v1");
-//    labels.put("l2", "v2");
-//    assertEquals("OK", client.tsCreate("seriesAdd1", TSCreateParams.createParams().retention(10000L).labels(labels)));
-//    assertEquals("OK", client.tsCreate("seriesAdd2", TSCreateParams.createParams().retention(10000L).labels(labels)));
-//
-//    long now = System.currentTimeMillis();
-//    List<Object> result =
-//        client.tsMadd(
-//            new Measurement("seriesAdd1", 0L, 1.1), // System time
-//            new Measurement("seriesAdd2", 2000L, 3.2),
-//            new Measurement("seriesAdd1", 1500L, 2.67), // Should return an error
-//            new Measurement("seriesAdd2", 3200L, 54.2),
-//            new Measurement("seriesAdd2", 4300L, 21.2));
-//
-//    assertTrue(now <= (Long) result.get(0) && now + 5 > (Long) result.get(0));
-//    assertEquals(2000L, result.get(1));
-//    assertTrue(result.get(2) instanceof JedisDataException);
-//    assertEquals(3200L, result.get(3));
-//    assertEquals(4300L, result.get(4));
-//
-//    List<TSElement> values1 = client.tsRange("seriesAdd1", 0, Long.MAX_VALUE);
-//    assertEquals(1, values1.size());
-//    assertEquals(1.1, values1.get(0).getValue(), 0.001);
-//
-//    List<TSElement> values2 = client.tsRange("seriesAdd2", TSRangeParams.rangeParams(0, Long.MAX_VALUE).count(2));
-//    assertEquals(2, values2.size());
-//    assertEquals(3.2, values2.get(0).getValue(), 0.001);
-//    assertEquals(54.2, values2.get(1).getValue(), 0.001);
-//  }
-//
-//  @Test
-//  public void testIncrByDecrBy() throws InterruptedException {
-//    assertEquals("OK", client.tsCreate("seriesIncDec", 100 * 1000 /*100sec retentionTime*/));
-//    assertEquals(1L, client.tsAdd("seriesIncDec", 1L, 1, 10000, null), 0);
-//    assertEquals(2L, client.incrBy("seriesIncDec", 3, 2L), 0);
-//    assertEquals(3L, client.decrBy("seriesIncDec", 2, 3L), 0);
-//    List<TSElement> values = client.tsRange("seriesIncDec", 1L, 3L);
-//    assertEquals(3, values.size());
-//    assertEquals(2, values[2].getValue(), 0);
-//    if (moduleVersion >= 10400) {
-//      assertEquals(3L, client.decrBy("seriesIncDec", 2, 3L), 0);
-//      values = client.tsRange("seriesIncDec", 1L, Long.MAX_VALUE);
-//      assertEquals(3, values.size());
-//    } else {
-//      try {
-//        client.incrBy("seriesIncDec", 3, 0L);
-//        fail();
-//      } catch (JedisDataException e) {
-//        // Error on incrby in the past
-//      }
-//    }
-//  }
+
+  @Test
+  public void testMadd() {
+    Map<String, String> labels = new HashMap<>();
+    labels.put("l1", "v1");
+    labels.put("l2", "v2");
+    assertEquals("OK", client.tsCreate("seriesAdd1", TSCreateParams.createParams().retention(10000L).labels(labels)));
+    assertEquals("OK", client.tsCreate("seriesAdd2", TSCreateParams.createParams().retention(10000L).labels(labels)));
+
+    List<Long> result = client.tsMAdd(
+        new KeyValue<>("seriesAdd1", new TSElement(1000L, 1.1)),
+        new KeyValue<>("seriesAdd2", new TSElement(2000L, 3.2)),
+        new KeyValue<>("seriesAdd1", new TSElement(1500L, 2.67)),
+        new KeyValue<>("seriesAdd2", new TSElement(3200L, 54.2)),
+        new KeyValue<>("seriesAdd2", new TSElement(4300L, 21.2)));
+
+    assertEquals(1000L, result.get(0).longValue());
+    assertEquals(2000L, result.get(1).longValue());
+    assertEquals(1500L, result.get(2).longValue());
+    assertEquals(3200L, result.get(3).longValue());
+    assertEquals(4300L, result.get(4).longValue());
+
+    List<TSElement> values1 = client.tsRange("seriesAdd1", 0, Long.MAX_VALUE);
+    assertEquals(2, values1.size());
+    assertEquals(1.1, values1.get(0).getValue(), 0.001);
+    assertEquals(2.67, values1.get(1).getValue(), 0.001);
+
+    List<TSElement> values2 = client.tsRange("seriesAdd2", TSRangeParams.rangeParams(0, Long.MAX_VALUE).count(2));
+    assertEquals(2, values2.size());
+    assertEquals(3.2, values2.get(0).getValue(), 0.001);
+    assertEquals(54.2, values2.get(1).getValue(), 0.001);
+  }
+
+  @Test
+  public void testIncrByDecrBy() throws InterruptedException {
+    assertEquals("OK", client.tsCreate("seriesIncDec",
+        TSCreateParams.createParams().retention(100 * 1000 /*100 sec*/)));
+
+    assertEquals(1L, client.tsAdd("seriesIncDec", 1L, 1), 0);
+    assertEquals(2L, client.tsIncrBy("seriesIncDec", 3, 2L), 0);
+    assertEquals(3L, client.tsDecrBy("seriesIncDec", 2, 3L), 0);
+    List<TSElement> values = client.tsRange("seriesIncDec", 1L, 3L);
+    assertEquals(3, values.size());
+    assertEquals(2, values.get(2).getValue(), 0);
+
+    assertEquals(3L, client.tsDecrBy("seriesIncDec", 2, 3L), 0);
+    values = client.tsRange("seriesIncDec", 1L, Long.MAX_VALUE);
+    assertEquals(3, values.size());
+
+    client.tsIncrBy("seriesIncDec", 100);
+    client.tsDecrBy("seriesIncDec", 33);
+  }
 
   @Test
   public void align() {
@@ -603,36 +625,6 @@ public class TimeSeriesTest extends RedisModuleCommandsTestBase {
   }
 
   @Test
-  public void testAlter() {
-
-    Map<String, String> labels = new HashMap<>();
-    labels.put("l1", "v1");
-    labels.put("l2", "v2");
-    assertEquals("OK", client.tsCreate("seriesAlter", TSCreateParams.createParams()
-        .retention(57 * 1000 /*57sec retentionTime*/).labels(labels)));
-    assertEquals(Collections.emptyList(), client.tsQueryIndex("l2=v22"));
-
-    // Test alter labels
-    labels.remove("l1");
-    labels.put("l2", "v22");
-    labels.put("l3", "v33");
-    assertEquals("OK", client.tsAlter("seriesAlter", TSAlterParams.alterParams().labels(labels)));
-    assertEquals(Collections.singletonList("seriesAlter"), client.tsQueryIndex("l2=v22", "l3=v33"));
-    assertEquals(Collections.emptyList(), client.tsQueryIndex("l1=v1"));
-
-    // Test alter labels and retention time
-    labels.put("l1", "v11");
-    labels.remove("l2");
-    assertEquals("OK", client.tsAlter("seriesAlter", TSAlterParams.alterParams()
-        .retentionTime(324 /*324ms retentionTime*/).labels(labels)));
-//    Info info = client.info("seriesAlter");
-//    assertEquals((Long) 324L, info.getProperty("retentionTime"));
-//    assertEquals("v11", info.getLabel("l1"));
-//    assertNull(info.getLabel("l2"));
-//    assertEquals("v33", info.getLabel("l3"));
-  }
-
-  @Test
   public void testQueryIndex() {
 
     Map<String, String> labels = new HashMap<>();
@@ -650,38 +642,63 @@ public class TimeSeriesTest extends RedisModuleCommandsTestBase {
     assertEquals(Arrays.asList("seriesQueryIndex1", "seriesQueryIndex2"), client.tsQueryIndex("l1=v1"));
     assertEquals(Arrays.asList("seriesQueryIndex2"), client.tsQueryIndex("l2=v22"));
   }
-//
-//  @Test
-//  public void testInfo() {
-//    Map<String, String> labels = new HashMap<>();
-//    labels.put("l1", "v1");
-//    labels.put("l2", "v2");
-//    assertEquals("OK", client.tsCreate("source", 10000L /*retentionTime*/, labels));
-//    assertEquals("OK", client.tsCreate("dest", 20000L /*retentionTime*/));
-//    assertEquals("OK", client.tsCreateRule("source", "dest", AggregationType.AVG, 100));
-//
-//    Info info = client.info("source");
-//    assertEquals((Long) 10000L, info.getProperty("retentionTime"));
-//    if (moduleVersion >= 10400) {
-//      assertEquals((Long) 4096L, info.getProperty("chunkSize"));
-//    } else {
-//      assertEquals((Long) 256L, info.getProperty("maxSamplesPerChunk"));
-//    }
-//    assertEquals("v1", info.getLabel("l1"));
-//    assertEquals("v2", info.getLabel("l2"));
-//    assertNull(info.getLabel("l3"));
-//
-//    Rule rule = info.getRule("dest");
-//    assertEquals("dest", rule.getTarget());
-//    assertEquals(100L, rule.getValue());
-//    assertEquals(AggregationType.AVG, rule.getAggregation());
-//    try {
-//      client.info("seriesInfo1");
-//      fail();
-//    } catch (JedisDataException e) {
-//      // Error on info on none existing series
-//    }
-//  }
+
+  @Test
+  public void testInfo() {
+    Map<String, String> labels = new HashMap<>();
+    labels.put("l1", "v1");
+    labels.put("l2", "v2");
+    assertEquals("OK", client.tsCreate("source", TSCreateParams.createParams().retention(10000L).labels(labels)));
+    assertEquals("OK", client.tsCreate("dest", TSCreateParams.createParams().retention(20000L)));
+    assertEquals("OK", client.tsCreateRule("source", "dest", AggregationType.AVG, 100));
+
+    TSInfo info = client.tsInfo("source");
+    assertEquals((Long) 10000L, info.getProperty("retentionTime"));
+    assertEquals((Long) 4096L, info.getProperty("chunkSize"));
+    assertEquals("v1", info.getLabel("l1"));
+    assertEquals("v2", info.getLabel("l2"));
+    assertNull(info.getLabel("l3"));
+
+    assertEquals(1, info.getRules().size());
+    TSInfo.Rule rule = info.getRule("dest");
+    assertEquals("dest", rule.getCompactionKey());
+    assertEquals(100L, rule.getBucketDuration());
+    assertEquals(AggregationType.AVG, rule.getAggregator());
+
+    try {
+      client.tsInfo("none");
+      fail();
+    } catch (JedisDataException e) {
+      // Error on info on none existing series
+    }
+  }
+
+  @Test
+  public void testInfoDebug() {
+    assertEquals("OK", client.tsCreate("source", TSCreateParams.createParams()));
+
+    TSInfo info = client.tsInfoDebug("source");
+    assertEquals((Long) 0L, info.getProperty("retentionTime"));
+    assertEquals(0, info.getLabels().size());
+    assertEquals(0, info.getRules().size());
+
+    List<Map<String, Object>> chunks = info.getChunks();
+    assertEquals(1, chunks.size());
+    Map<String, Object> chunk = chunks.get(0);
+    assertEquals(0L, chunk.get("samples"));
+    // Don't care what the values are as long as the values are parsed according to types
+    assertTrue(chunk.get("size") instanceof Long);
+    assertTrue(chunk.get("startTimestamp") instanceof Long);
+    assertTrue(chunk.get("endTimestamp") instanceof Long);
+    assertTrue(chunk.get("bytesPerSample") instanceof Double);
+
+    try {
+      client.tsInfoDebug("none");
+      fail();
+    } catch (JedisDataException e) {
+      // Error on info on none existing series
+    }
+  }
 
   @Test
   public void testRevRange() {
@@ -771,5 +788,159 @@ public class TimeSeriesTest extends RedisModuleCommandsTestBase {
     assertEquals(Arrays.asList(new TSElement(2000L, 3.1), new TSElement(1000L, 1.1)), ranges3.get(0).getValue());
     assertEquals(labels3, ranges3.get(1).getLabels());
     assertEquals(Arrays.asList(new TSElement(3000L, -33.0), new TSElement(2000L, 0.0)), ranges3.get(1).getValue());
+  }
+
+  @Test
+  public void latest() {
+    client.tsCreate("ts1");
+    client.tsCreate("ts2");
+    client.tsCreateRule("ts1", "ts2", AggregationType.SUM, 10);
+    client.tsAdd("ts1", 1, 1);
+    client.tsAdd("ts1", 2, 3);
+    client.tsAdd("ts1", 11, 7);
+    client.tsAdd("ts1", 13, 1);
+    List<TSElement> range = client.tsRange("ts1", 0, 20);
+    assertEquals(4, range.size());
+
+    final TSElement compact = new TSElement(0, 4);
+    final TSElement latest = new TSElement(10, 8);
+
+    // get
+    assertEquals(compact, client.tsGet("ts2", TSGetParams.getParams()));
+
+    assertEquals(latest, client.tsGet("ts2", TSGetParams.getParams().latest()));
+
+    // range
+    assertEquals(Arrays.asList(compact), client.tsRange("ts2", TSRangeParams.rangeParams(0, 10)));
+
+    assertEquals(Arrays.asList(compact, latest), client.tsRange("ts2", TSRangeParams.rangeParams(0, 10).latest()));
+
+    // revrange
+    assertEquals(Arrays.asList(compact), client.tsRevRange("ts2", TSRangeParams.rangeParams(0, 10)));
+
+    assertEquals(Arrays.asList(latest, compact), client.tsRevRange("ts2", TSRangeParams.rangeParams(0, 10).latest()));
+  }
+
+  @Test
+  public void latestMulti() {
+    client.tsCreate("ts1");
+    client.tsCreate("ts2", TSCreateParams.createParams().label("compact", "true"));
+    client.tsCreateRule("ts1", "ts2", AggregationType.SUM, 10);
+    client.tsAdd("ts1", 1, 1);
+    client.tsAdd("ts1", 2, 3);
+    client.tsAdd("ts1", 11, 7);
+    client.tsAdd("ts1", 13, 1);
+    List<TSElement> range = client.tsRange("ts1", 0, 20);
+    assertEquals(4, range.size());
+
+    final TSElement compact = new TSElement(0, 4);
+    final TSElement latest = new TSElement(10, 8);
+
+    // mget
+    assertEquals(Arrays.asList(new TSKeyValue<>("ts2", null, compact)),
+        client.tsMGet(TSMGetParams.multiGetParams(), "compact=true"));
+
+    assertEquals(Arrays.asList(new TSKeyValue<>("ts2", null, latest)),
+        client.tsMGet(TSMGetParams.multiGetParams().latest(), "compact=true"));
+
+    // mrange
+    assertEquals(Arrays.asList(new TSKeyedElements("ts2", null, Arrays.asList(compact))),
+        client.tsMRange(TSMRangeParams.multiRangeParams().filter("compact=true")));
+
+    assertEquals(Arrays.asList(new TSKeyedElements("ts2", null, Arrays.asList(compact, latest))),
+        client.tsMRange(TSMRangeParams.multiRangeParams().latest().filter("compact=true")));
+
+    // mrevrange
+    assertEquals(Arrays.asList(new TSKeyedElements("ts2", null, Arrays.asList(compact))),
+        client.tsMRevRange(TSMRangeParams.multiRangeParams().filter("compact=true")));
+
+    assertEquals(Arrays.asList(new TSKeyedElements("ts2", null, Arrays.asList(latest, compact))),
+        client.tsMRevRange(TSMRangeParams.multiRangeParams().latest().filter("compact=true")));
+  }
+
+  @Test
+  public void empty() {
+    client.tsCreate("ts", TSCreateParams.createParams().label("l", "v"));
+    client.tsAdd("ts", 1, 1);
+    client.tsAdd("ts", 2, 3);
+    client.tsAdd("ts", 11, 7);
+    client.tsAdd("ts", 13, 1);
+
+    // range
+    List<TSElement> range = client.tsRange("ts", TSRangeParams.rangeParams().aggregation(AggregationType.MAX, 5));
+    assertEquals(2, range.size());
+    range = client.tsRange("ts", TSRangeParams.rangeParams().aggregation(AggregationType.MAX, 5).empty());
+    assertEquals(3, range.size());
+    assertNotNull(range.get(1).getValue()); // any parsable value
+
+    // revrange
+    range = client.tsRevRange("ts", TSRangeParams.rangeParams().aggregation(AggregationType.MIN, 5));
+    assertEquals(2, range.size());
+    range = client.tsRevRange("ts", TSRangeParams.rangeParams().aggregation(AggregationType.MIN, 5).empty());
+    assertEquals(3, range.size());
+    assertNotNull(range.get(1).getValue()); // any parsable value
+
+    // mrange
+    List<TSKeyedElements> mrange = client.tsMRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.MIN, 5).filter("l=v"));
+    assertEquals(1, mrange.size());
+    assertEquals(2, mrange.get(0).getValue().size());
+    mrange = client.tsMRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.MIN, 5).empty().filter("l=v"));
+    assertEquals(1, mrange.size());
+    assertEquals(3, mrange.get(0).getValue().size());
+    assertNotNull(mrange.get(0).getValue().get(1).getValue()); // any parsable value
+
+    // mrevrange
+    mrange = client.tsMRevRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.MAX, 5).filter("l=v"));
+    assertEquals(1, mrange.size());
+    assertEquals(2, mrange.get(0).getValue().size());
+    mrange = client.tsMRevRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.MAX, 5).empty().filter("l=v"));
+    assertEquals(1, mrange.size());
+    assertEquals(3, mrange.get(0).getValue().size());
+    assertNotNull(mrange.get(0).getValue().get(1).getValue()); // any parsable value
+  }
+
+  @Test
+  public void bucketTimestamp() {
+    client.tsCreate("ts", TSCreateParams.createParams().label("l", "v"));
+    client.tsAdd("ts", 1, 1);
+    client.tsAdd("ts", 2, 3);
+
+    // range / revrange
+    assertEquals(0, client.tsRange("ts", TSRangeParams.rangeParams()
+        .aggregation(AggregationType.FIRST, 10).bucketTimestampLow()).get(0).getTimestamp());
+    assertEquals(10, client.tsRange("ts", TSRangeParams.rangeParams()
+        .aggregation(AggregationType.LAST, 10).bucketTimestampHigh()).get(0).getTimestamp());
+    assertEquals(5, client.tsRange("ts", TSRangeParams.rangeParams()
+        .aggregation(AggregationType.RANGE, 10).bucketTimestampMid()).get(0).getTimestamp());
+    assertEquals(5, client.tsRevRange("ts", TSRangeParams.rangeParams()
+        .aggregation(AggregationType.TWA, 10).bucketTimestampMid()).get(0).getTimestamp());
+    assertEquals(5, client.tsRevRange("ts", TSRangeParams.rangeParams()
+        .aggregation(AggregationType.TWA, 10).bucketTimestamp("mid")).get(0).getTimestamp());
+
+    // mrange / mrevrange
+    assertEquals(0, client.tsMRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.STD_P, 10)
+        .bucketTimestampLow().filter("l=v")).get(0).getValue().get(0).getTimestamp());
+    assertEquals(10, client.tsMRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.STD_S, 10)
+        .bucketTimestampHigh().filter("l=v")).get(0).getValue().get(0).getTimestamp());
+    assertEquals(5, client.tsMRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.TWA, 10)
+        .bucketTimestampMid().filter("l=v")).get(0).getValue().get(0).getTimestamp());
+    assertEquals(5, client.tsMRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.VAR_P, 10)
+        .bucketTimestampMid().filter("l=v")).get(0).getValue().get(0).getTimestamp());
+    assertEquals(5, client.tsMRange(TSMRangeParams.multiRangeParams().aggregation(AggregationType.VAR_S, 10)
+        .bucketTimestamp("~").filter("l=v")).get(0).getValue().get(0).getTimestamp());
+  }
+
+  @Test
+  public void alignTimestamp() {
+    client.tsCreate("ts1");
+    client.tsCreate("ts2");
+    client.tsCreate("ts3");
+    client.tsCreateRule("ts1", "ts2", AggregationType.COUNT, 10, 0);
+    client.tsCreateRule("ts1", "ts3", AggregationType.COUNT, 10, 1);
+    client.tsAdd("ts1", 1, 1);
+    client.tsAdd("ts1", 10, 3);
+    client.tsAdd("ts1", 21, 7);
+    assertEquals(2, client.tsRange("ts2", TSRangeParams.rangeParams().aggregation(AggregationType.COUNT, 10)).size());
+    assertEquals(1, client.tsRange("ts3", TSRangeParams.rangeParams().aggregation(AggregationType.COUNT, 10)).size());
   }
 }

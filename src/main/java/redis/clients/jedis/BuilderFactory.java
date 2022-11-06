@@ -17,6 +17,7 @@ import redis.clients.jedis.search.aggr.AggregationResult;
 import redis.clients.jedis.timeseries.TSKeyedElements;
 import redis.clients.jedis.timeseries.TSElement;
 import redis.clients.jedis.timeseries.TSKeyValue;
+import redis.clients.jedis.util.DoublePrecision;
 import redis.clients.jedis.util.JedisByteHashMap;
 import redis.clients.jedis.util.KeyValue;
 import redis.clients.jedis.util.SafeEncoder;
@@ -75,7 +76,7 @@ public final class BuilderFactory {
     @Override
     public Map<String, Object> build(Object data) {
       final List list = (List) data;
-      final Map<String, Object> map = new HashMap<>(list.size() / 2, 1);
+      final Map<String, Object> map = new HashMap<>(list.size() / 2, 1f);
       final Iterator iterator = list.iterator();
       while (iterator.hasNext()) {
         map.put(STRING.build(iterator.next()), ENCODED_OBJECT.build(iterator.next()));
@@ -117,15 +118,7 @@ public final class BuilderFactory {
   public static final Builder<Double> DOUBLE = new Builder<Double>() {
     @Override
     public Double build(Object data) {
-      String string = STRING.build(data);
-      if (string == null) return null;
-      try {
-        return Double.valueOf(string);
-      } catch (NumberFormatException e) {
-        if (string.equals("inf") || string.equals("+inf")) return Double.POSITIVE_INFINITY;
-        if (string.equals("-inf")) return Double.NEGATIVE_INFINITY;
-        throw e;
-      }
+      return DoublePrecision.parseFloatingPointNumber(STRING.build(data));
     }
 
     @Override
@@ -319,59 +312,48 @@ public final class BuilderFactory {
     public String toString() {
       return "String";
     }
-
   };
 
   public static final Builder<List<String>> STRING_LIST = new Builder<List<String>>() {
     @Override
     @SuppressWarnings("unchecked")
     public List<String> build(Object data) {
-      if (null == data) {
-        return null;
-      }
-      List<byte[]> l = (List<byte[]>) data;
-      final ArrayList<String> result = new ArrayList<>(l.size());
-      for (final byte[] barray : l) {
-        if (barray == null) {
-          result.add(null);
-        } else {
-          result.add(SafeEncoder.encode(barray));
-        }
-      }
-      return result;
+      if (null == data) return null;
+      return ((List<Object>) data).stream().map(STRING::build).collect(Collectors.toList());
     }
 
     @Override
     public String toString() {
       return "List<String>";
     }
-
   };
 
   public static final Builder<Set<String>> STRING_SET = new Builder<Set<String>>() {
     @Override
     @SuppressWarnings("unchecked")
     public Set<String> build(Object data) {
-      if (null == data) {
-        return null;
-      }
-      List<byte[]> l = (List<byte[]>) data;
-      final Set<String> result = new HashSet<>(l.size(), 1);
-      for (final byte[] barray : l) {
-        if (barray == null) {
-          result.add(null);
-        } else {
-          result.add(SafeEncoder.encode(barray));
-        }
-      }
-      return result;
+      if (null == data) return null;
+      return ((List<Object>) data).stream().map(STRING::build).collect(Collectors.toSet());
     }
 
     @Override
     public String toString() {
       return "Set<String>";
     }
+  };
 
+  public static final Builder<Set<String>> STRING_ORDERED_SET = new Builder<Set<String>>() {
+    @Override
+    @SuppressWarnings("unchecked")
+    public Set<String> build(Object data) {
+      if (null == data) return null;
+      return ((List<Object>) data).stream().map(STRING::build).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    @Override
+    public String toString() {
+      return "Set<String>";
+    }
   };
 
   public static final Builder<Map<String, String>> STRING_MAP = new Builder<Map<String, String>>() {
@@ -379,7 +361,7 @@ public final class BuilderFactory {
     @SuppressWarnings("unchecked")
     public Map<String, String> build(Object data) {
       final List<byte[]> flatHash = (List<byte[]>) data;
-      final Map<String, String> hash = new HashMap<>(flatHash.size() / 2, 1);
+      final Map<String, String> hash = new HashMap<>(flatHash.size() / 2, 1f);
       final Iterator<byte[]> iterator = flatHash.iterator();
       while (iterator.hasNext()) {
         hash.put(SafeEncoder.encode(iterator.next()), SafeEncoder.encode(iterator.next()));
@@ -392,7 +374,6 @@ public final class BuilderFactory {
     public String toString() {
       return "Map<String, String>";
     }
-
   };
 
   public static final Builder<KeyedListElement> KEYED_LIST_ELEMENT = new Builder<KeyedListElement>() {
@@ -679,7 +660,7 @@ public final class BuilderFactory {
     @SuppressWarnings("unchecked")
     public Map<String, Long> build(Object data) {
       final List<Object> flatHash = (List<Object>) data;
-      final Map<String, Long> hash = new HashMap<>(flatHash.size() / 2, 1);
+      final Map<String, Long> hash = new HashMap<>(flatHash.size() / 2, 1f);
       final Iterator<Object> iterator = flatHash.iterator();
       while (iterator.hasNext()) {
         hash.put(SafeEncoder.encode((byte[]) iterator.next()), (Long) iterator.next());
@@ -789,7 +770,7 @@ public final class BuilderFactory {
       }
 
       List<Object> list = (List<Object>) data;
-      Map<String, CommandDocument> map = new HashMap<>(list.size());
+      Map<String, CommandDocument> map = new HashMap<>(list.size() / 2, 1f);
 
       for (int i = 0; i < list.size();) {
         String name = STRING.build(list.get(i++));
@@ -1028,7 +1009,7 @@ public final class BuilderFactory {
       List<byte[]> hash = (List<byte[]>) objectList.get(1);
 
       Iterator<byte[]> hashIterator = hash.iterator();
-      Map<String, String> map = new HashMap<>(hash.size() / 2);
+      Map<String, String> map = new HashMap<>(hash.size() / 2, 1f);
       while (hashIterator.hasNext()) {
         map.put(SafeEncoder.encode(hashIterator.next()), SafeEncoder.encode(hashIterator.next()));
       }
@@ -1063,9 +1044,13 @@ public final class BuilderFactory {
         String entryIdString = SafeEncoder.encode((byte[]) res.get(0));
         StreamEntryID entryID = new StreamEntryID(entryIdString);
         List<byte[]> hash = (List<byte[]>) res.get(1);
+        if (hash == null) {
+          responses.add(new StreamEntry(entryID, null));
+          continue;
+        }
 
         Iterator<byte[]> hashIterator = hash.iterator();
-        Map<String, String> map = new HashMap<>(hash.size() / 2);
+        Map<String, String> map = new HashMap<>(hash.size() / 2, 1f);
         while (hashIterator.hasNext()) {
           map.put(SafeEncoder.encode(hashIterator.next()), SafeEncoder.encode(hashIterator.next()));
         }
@@ -1639,6 +1624,34 @@ public final class BuilderFactory {
     }
   };
 
+  public static final Builder<List<List<String>>> STRING_LIST_LIST = new Builder<List<List<String>>>() {
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<List<String>> build(Object data) {
+      if (null == data) return null;
+      return ((List<Object>) data).stream().map(STRING_LIST::build).collect(Collectors.toList());
+    }
+
+    @Override
+    public String toString() {
+      return "List<List<String>>";
+    }
+  };
+
+  public static final Builder<List<List<Object>>> ENCODED_OBJECT_LIST_LIST = new Builder<List<List<Object>>>() {
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<List<Object>> build(Object data) {
+      if (null == data) return null;
+      return ((List<Object>) data).stream().map(ENCODED_OBJECT_LIST::build).collect(Collectors.toList());
+    }
+
+    @Override
+    public String toString() {
+      return "List<List<Object>>";
+    }
+  };
+
   public static final Builder<AggregationResult> SEARCH_AGGREGATION_RESULT = new Builder<AggregationResult>() {
     @Override
     public AggregationResult build(Object data) {
@@ -1658,11 +1671,40 @@ public final class BuilderFactory {
     @Override
     public Map<String, List<String>> build(Object data) {
       List<Object> list = (List<Object>) data;
-      Map<String, List<String>> dump = new HashMap<>(list.size() / 2);
+      Map<String, List<String>> dump = new HashMap<>(list.size() / 2, 1f);
       for (int i = 0; i < list.size(); i += 2) {
         dump.put(STRING.build(list.get(i)), STRING_LIST.build(list.get(i + 1)));
       }
       return dump;
+    }
+  };
+
+  public static final Builder<Map<String, Map<String, Double>>> SEARCH_SPELLCHECK_RESPONSE
+      = new Builder<Map<String, Map<String, Double>>>() {
+
+    private final String TERM = "TERM";
+
+    @Override
+    public Map<String, Map<String, Double>> build(Object data) {
+      List<Object> rawTerms = (List<Object>) data;
+      Map<String, Map<String, Double>> returnTerms = new LinkedHashMap<>(rawTerms.size());
+
+      for (Object rawTerm : rawTerms) {
+        List<Object> rawElements = (List<Object>) rawTerm;
+
+        String header = STRING.build(rawElements.get(0));
+        if (!TERM.equals(header)) {
+          throw new IllegalStateException("Unrecognized header: " + header);
+        }
+        String term = STRING.build(rawElements.get(1));
+
+        List<List<Object>> list = (List<List<Object>>) rawElements.get(2);
+        Map<String, Double> entries = new LinkedHashMap<>(list.size());
+        list.forEach(entry -> entries.put(STRING.build(entry.get(1)), DOUBLE.build(entry.get(0))));
+
+        returnTerms.put(term, entries);
+      }
+      return returnTerms;
     }
   };
 
@@ -1705,6 +1747,14 @@ public final class BuilderFactory {
               STRING_MAP_FROM_PAIRS.build(tsList.get(1)),
               TIMESERIES_ELEMENT.build(tsList.get(2))))
           .collect(Collectors.toList());
+    }
+  };
+
+  public static final Builder<Map.Entry<Long, byte[]>> BLOOM_SCANDUMP_RESPONSE = new Builder<Map.Entry<Long, byte[]>>() {
+    @Override
+    public Map.Entry<Long, byte[]> build(Object data) {
+      List<Object> list = (List<Object>) data;
+      return new KeyValue<>(LONG.build(list.get(0)), BINARY.build(list.get(1)));
     }
   };
 

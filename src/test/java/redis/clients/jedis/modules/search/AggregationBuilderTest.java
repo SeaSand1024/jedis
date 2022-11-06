@@ -86,6 +86,70 @@ public class AggregationBuilderTest extends RedisModuleCommandsTestBase {
   }
 
   @Test
+  public void testAggregationBuilderVerbatim() {
+    Schema sc = new Schema();
+    sc.addSortableTextField("name", 1.0);
+    client.ftCreate(index, IndexOptions.defaultOptions(), sc);
+    addDocument(new Document("data1").set("name", "hello kitty"));
+
+    AggregationBuilder r = new AggregationBuilder("kitti");
+
+    AggregationResult res = client.ftAggregate(index, r);
+    assertEquals(1, res.totalResults);
+
+    r = new AggregationBuilder("kitti")
+            .verbatim();
+
+    res = client.ftAggregate(index, r);
+    assertEquals(0, res.totalResults);
+  }
+
+  @Test
+  public void testAggregationBuilderTimeout() {
+    Schema sc = new Schema();
+    sc.addSortableTextField("name", 1.0);
+    sc.addSortableNumericField("count");
+    client.ftCreate(index, IndexOptions.defaultOptions(), sc);
+    addDocument(new Document("data1").set("name", "abc").set("count", 10));
+    addDocument(new Document("data2").set("name", "def").set("count", 5));
+    addDocument(new Document("data3").set("name", "def").set("count", 25));
+
+    AggregationBuilder r = new AggregationBuilder()
+            .groupBy("@name", Reducers.sum("@count").as("sum"))
+            .timeout(5000);
+
+    AggregationResult res = client.ftAggregate(index, r);
+    assertEquals(2, res.totalResults);
+  }
+
+  @Test
+  public void testAggregationBuilderParamsDialect() {
+    Schema sc = new Schema();
+    sc.addSortableTextField("name", 1.0);
+    sc.addSortableNumericField("count");
+    client.ftCreate(index, IndexOptions.defaultOptions(), sc);
+    addDocument(new Document("data1").set("name", "abc").set("count", 10));
+    addDocument(new Document("data2").set("name", "def").set("count", 5));
+    addDocument(new Document("data3").set("name", "def").set("count", 25));
+
+    Map<String, Object> params = new HashMap<>();
+    params.put("name", "abc");
+
+    AggregationBuilder r = new AggregationBuilder("$name")
+            .groupBy("@name", Reducers.sum("@count").as("sum"))
+            .params(params)
+            .dialect(2); // From documentation - To use PARAMS, DIALECT must be set to 2
+
+    AggregationResult res = client.ftAggregate(index, r);
+    assertEquals(1, res.totalResults);
+
+    Row r1 = res.getRow(0);
+    assertNotNull(r1);
+    assertEquals("abc", r1.getString("name"));
+    assertEquals(10, r1.getLong("sum"));
+  }
+
+  @Test
   public void testApplyAndFilterAggregations() {
     Schema sc = new Schema();
     sc.addSortableTextField("name", 1.0);
@@ -126,7 +190,7 @@ public class AggregationBuilderTest extends RedisModuleCommandsTestBase {
   }
 
   @Test
-  public void testLoadAsAggregations() {
+  public void load() {
     Schema sc = new Schema();
     sc.addSortableTextField("name", 1.0);
     sc.addSortableNumericField("subj1");
@@ -140,6 +204,25 @@ public class AggregationBuilderTest extends RedisModuleCommandsTestBase {
     AggregationBuilder builder = new AggregationBuilder()
         .load(FieldName.of("@subj1").as("a"), FieldName.of("@subj2").as("b"))
         .apply("(@a+@b)/2", "avg").sortByDesc("@avg");
+
+    AggregationResult result = client.ftAggregate(index, builder);
+    assertEquals(50.0, result.getRow(0).getDouble("avg"), 0d);
+    assertEquals(45.0, result.getRow(1).getDouble("avg"), 0d);
+  }
+
+  @Test
+  public void loadAll() {
+    Schema sc = new Schema();
+    sc.addSortableTextField("name", 1.0);
+    sc.addSortableNumericField("subj1");
+    sc.addSortableNumericField("subj2");
+    client.ftCreate(index, IndexOptions.defaultOptions(), sc);
+    addDocument(new Document("data1").set("name", "abc").set("subj1", 20).set("subj2", 70));
+    addDocument(new Document("data2").set("name", "def").set("subj1", 60).set("subj2", 40));
+
+    AggregationBuilder builder = new AggregationBuilder()
+        .loadAll()
+        .apply("(@subj1+@subj2)/2", "avg").sortByDesc("@avg");
 
     AggregationResult result = client.ftAggregate(index, builder);
     assertEquals(50.0, result.getRow(0).getDouble("avg"), 0d);

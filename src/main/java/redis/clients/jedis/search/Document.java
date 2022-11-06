@@ -55,7 +55,11 @@ public class Document implements Serializable {
     ret.payload = payload;
     if (fields != null) {
       for (int i = 0; i < fields.size(); i += 2) {
-        ret.set(SafeEncoder.encode(fields.get(i)), decode ? SafeEncoder.encode(fields.get(i + 1)) : fields.get(i + 1));
+        byte[] rawKey = fields.get(i);
+        byte[] rawValue = fields.get(i + 1);
+        String key = SafeEncoder.encode(rawKey);
+        Object value = rawValue == null ? null : decode ? SafeEncoder.encode(rawValue) : rawValue;
+        ret.set(key, value);
       }
     }
     return ret;
@@ -128,7 +132,7 @@ public class Document implements Serializable {
   @Override
   public String toString() {
     return "id:" + this.getId() + ", score: " + this.getScore() +
-            ", payload:" + SafeEncoder.encode(this.getPayload()) +
+            ", payload:" + (this.getPayload() == null ? "null" : SafeEncoder.encode(this.getPayload())) +
             ", properties:" + this.getProperties();
   }
 }

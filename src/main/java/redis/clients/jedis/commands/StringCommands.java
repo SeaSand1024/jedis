@@ -32,7 +32,9 @@ public interface StringCommands {
    * @param key
    * @param value
    * @param params {@link SetParams}
-   * @return OK
+   * @return simple-string-reply {@code OK} if {@code SET} was executed correctly, or {@code null}
+   * if the {@code SET} operation was not performed because the user specified the NX or XX option
+   * but the condition was not met.
    */
   String set(String key, String value, SetParams params);
 
@@ -47,6 +49,11 @@ public interface StringCommands {
    * @return The value stored in key
    */
   String get(String key);
+
+  /**
+   * WARNING: {@link SetParams#get()} MUST NOT be used with this method.
+   */
+  String setGet(String key, String value, SetParams params);
 
   /**
    * <b><a href="http://redis.io/commands/getdel">GetDel Command</a></b>

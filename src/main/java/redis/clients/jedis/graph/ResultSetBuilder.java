@@ -9,15 +9,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
 import redis.clients.jedis.Builder;
 import redis.clients.jedis.BuilderFactory;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.exceptions.JedisException;
-import redis.clients.jedis.graph.entities.Edge;
-import redis.clients.jedis.graph.entities.GraphEntity;
-import redis.clients.jedis.graph.entities.Node;
-import redis.clients.jedis.graph.entities.Path;
-import redis.clients.jedis.graph.entities.Point;
+import redis.clients.jedis.graph.entities.*;
 import redis.clients.jedis.util.SafeEncoder;
 
 class ResultSetBuilder extends Builder<ResultSet> {
@@ -129,42 +126,44 @@ class ResultSetBuilder extends Builder<ResultSet> {
   @SuppressWarnings("unchecked")
   private List<Record> parseRecords(Header header, Object data) {
     List<List<Object>> rawResultSet = (List<List<Object>>) data;
-    List<Record> results = new ArrayList<>();
+
     if (rawResultSet == null || rawResultSet.isEmpty()) {
-      return results;
-    } else {
-      // go over each raw result
-      for (List<Object> row : rawResultSet) {
-
-        List<Object> parsedRow = new ArrayList<>(row.size());
-        // go over each object in the result
-        for (int i = 0; i < row.size(); i++) {
-          // get raw representation of the object
-          List<Object> obj = (List<Object>) row.get(i);
-          // get object type
-          ResultSet.ColumnType objType = header.getSchemaTypes().get(i);
-          // deserialize according to type and
-          switch (objType) {
-            case NODE:
-              parsedRow.add(deserializeNode(obj));
-              break;
-            case RELATION:
-              parsedRow.add(deserializeEdge(obj));
-              break;
-            case SCALAR:
-              parsedRow.add(deserializeScalar(obj));
-              break;
-            default:
-              parsedRow.add(null);
-              break;
-          }
-
-        }
-        // create new record from deserialized objects
-        Record record = new RecordImpl(header.getSchemaNames(), parsedRow);
-        results.add(record);
-      }
+      return new ArrayList<>(0);
     }
+
+    List<Record> results = new ArrayList<>(rawResultSet.size());
+    // go over each raw result
+    for (List<Object> row : rawResultSet) {
+
+      List<Object> parsedRow = new ArrayList<>(row.size());
+      // go over each object in the result
+      for (int i = 0; i < row.size(); i++) {
+        // get raw representation of the object
+        List<Object> obj = (List<Object>) row.get(i);
+        // get object type
+        ResultSet.ColumnType objType = header.getSchemaTypes().get(i);
+        // deserialize according to type and
+        switch (objType) {
+          case NODE:
+            parsedRow.add(deserializeNode(obj));
+            break;
+          case RELATION:
+            parsedRow.add(deserializeEdge(obj));
+            break;
+          case SCALAR:
+            parsedRow.add(deserializeScalar(obj));
+            break;
+          default:
+            parsedRow.add(null);
+            break;
+        }
+      }
+
+      // create new record from deserialized objects
+      Record record = new RecordImpl(header.getSchemaNames(), parsedRow);
+      results.add(record);
+    }
+
     return results;
   }
 
@@ -177,25 +176,28 @@ class ResultSetBuilder extends Builder<ResultSet> {
    */
   @SuppressWarnings("unchecked")
   private Node deserializeNode(List<Object> rawNodeData) {
-    Node node = new Node();
-    deserializeGraphEntityId(node, rawNodeData.get(0));
+
     List<Long> labelsIndices = (List<Long>) rawNodeData.get(1);
+    List<List<Object>> rawProperties = (List<List<Object>>) rawNodeData.get(2);
+
+    Node node = new Node(labelsIndices.size(), rawProperties.size());
+    deserializeGraphEntityId(node, (Long) rawNodeData.get(0));
+
     for (Long labelIndex : labelsIndices) {
       String label = graphCache.getLabel(labelIndex.intValue());
       node.addLabel(label);
     }
-    deserializeGraphEntityProperties(node, (List<List<Object>>) rawNodeData.get(2));
+
+    deserializeGraphEntityProperties(node, rawProperties);
 
     return node;
-
   }
 
   /**
    * @param graphEntity graph entity
-   * @param rawEntityId raw representation of entity id to be set to the graph entity
+   * @param id entity id to be set to the graph entity
    */
-  private void deserializeGraphEntityId(GraphEntity graphEntity, Object rawEntityId) {
-    long id = (Long) rawEntityId;
+  private void deserializeGraphEntityId(GraphEntity graphEntity, long id) {
     graphEntity.setId(id);
   }
 
@@ -207,8 +209,11 @@ class ResultSetBuilder extends Builder<ResultSet> {
    */
   @SuppressWarnings("unchecked")
   private Edge deserializeEdge(List<Object> rawEdgeData) {
-    Edge edge = new Edge();
-    deserializeGraphEntityId(edge, rawEdgeData.get(0));
+
+    List<List<Object>> rawProperties = (List<List<Object>>) rawEdgeData.get(4);
+
+    Edge edge = new Edge(rawProperties.size());
+    deserializeGraphEntityId(edge, (Long) rawEdgeData.get(0));
 
     String relationshipType = graphCache.getRelationshipType(((Long) rawEdgeData.get(1)).intValue());
     edge.setRelationshipType(relationshipType);
@@ -216,7 +221,7 @@ class ResultSetBuilder extends Builder<ResultSet> {
     edge.setSource((long) rawEdgeData.get(2));
     edge.setDestination((long) rawEdgeData.get(3));
 
-    deserializeGraphEntityProperties(edge, (List<List<Object>>) rawEdgeData.get(4));
+    deserializeGraphEntityProperties(edge, rawProperties);
 
     return edge;
   }
@@ -237,7 +242,6 @@ class ResultSetBuilder extends Builder<ResultSet> {
 
       entity.addProperty(name, deserializeScalar(propertyScalar));
     }
-
   }
 
   /**
@@ -256,7 +260,7 @@ class ResultSetBuilder extends Builder<ResultSet> {
       case BOOLEAN:
         return Boolean.parseBoolean(SafeEncoder.encode((byte[]) obj));
       case DOUBLE:
-        return Double.parseDouble(SafeEncoder.encode((byte[]) obj));
+        return BuilderFactory.DOUBLE.build(obj);
       case INTEGER:
         return (Long) obj;
       case STRING:
@@ -286,8 +290,11 @@ class ResultSetBuilder extends Builder<ResultSet> {
   @SuppressWarnings("unchecked")
   private Map<String, Object> deserializeMap(Object rawScalarData) {
     List<Object> keyTypeValueEntries = (List<Object>) rawScalarData;
-    Map<String, Object> map = new HashMap<>();
-    for (int i = 0; i < keyTypeValueEntries.size(); i += 2) {
+
+    int size = keyTypeValueEntries.size();
+    Map<String, Object> map = new HashMap<>(size >> 1); // set the capacity to half of the list
+
+    for (int i = 0; i < size; i += 2) {
       String key = SafeEncoder.encode((byte[]) keyTypeValueEntries.get(i));
       Object value = deserializeScalar((List<Object>) keyTypeValueEntries.get(i + 1));
       map.put(key, value);

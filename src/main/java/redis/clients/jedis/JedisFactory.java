@@ -164,12 +164,12 @@ public class JedisFactory implements PooledObjectFactory<Jedis> {
           jedis.quit();
         }
       } catch (RuntimeException e) {
-        logger.warn("Error while QUIT", e);
+        logger.debug("Error while QUIT", e);
       }
       try {
         jedis.close();
       } catch (RuntimeException e) {
-        logger.warn("Error while close", e);
+        logger.debug("Error while close", e);
       }
     }
   }
@@ -186,12 +186,12 @@ public class JedisFactory implements PooledObjectFactory<Jedis> {
         try {
           jedis.quit();
         } catch (RuntimeException e) {
-          logger.warn("Error while QUIT", e);
+          logger.debug("Error while QUIT", e);
         }
         try {
           jedis.close();
         } catch (RuntimeException e) {
-          logger.warn("Error while close", e);
+          logger.debug("Error while close", e);
         }
       }
       throw je;
@@ -207,8 +207,18 @@ public class JedisFactory implements PooledObjectFactory<Jedis> {
   public boolean validateObject(PooledObject<Jedis> pooledJedis) {
     final Jedis jedis = pooledJedis.getObject();
     try {
-      // check HostAndPort ??
-      return jedis.getConnection().isConnected() && jedis.ping().equals("PONG");
+      boolean targetHasNotChanged = true;
+      if (jedisSocketFactory instanceof DefaultJedisSocketFactory) {
+        HostAndPort targetAddress = ((DefaultJedisSocketFactory) jedisSocketFactory).getHostAndPort();
+        HostAndPort objectAddress = jedis.getConnection().getHostAndPort();
+
+        targetHasNotChanged = targetAddress.getHost().equals(objectAddress.getHost())
+            && targetAddress.getPort() == objectAddress.getPort();
+      }
+
+      return targetHasNotChanged
+          && jedis.getConnection().isConnected()
+          && jedis.ping().equals("PONG");
     } catch (final Exception e) {
       logger.error("Error while validating pooled Jedis object.", e);
       return false;

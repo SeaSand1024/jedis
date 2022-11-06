@@ -8,10 +8,7 @@ import java.util.Set;
 import org.json.JSONArray;
 
 import redis.clients.jedis.args.*;
-import redis.clients.jedis.bloom.BFInsertParams;
-import redis.clients.jedis.bloom.BFReserveParams;
-import redis.clients.jedis.bloom.CFInsertParams;
-import redis.clients.jedis.bloom.CFReserveParams;
+import redis.clients.jedis.bloom.*;
 import redis.clients.jedis.commands.DatabasePipelineCommands;
 import redis.clients.jedis.commands.PipelineBinaryCommands;
 import redis.clients.jedis.commands.PipelineCommands;
@@ -25,12 +22,10 @@ import redis.clients.jedis.json.Path;
 import redis.clients.jedis.json.Path2;
 import redis.clients.jedis.params.*;
 import redis.clients.jedis.resps.*;
-import redis.clients.jedis.search.IndexOptions;
-import redis.clients.jedis.search.Query;
-import redis.clients.jedis.search.Schema;
-import redis.clients.jedis.search.SearchResult;
+import redis.clients.jedis.search.*;
 import redis.clients.jedis.search.aggr.AggregationBuilder;
 import redis.clients.jedis.search.aggr.AggregationResult;
+import redis.clients.jedis.search.schemafields.SchemaField;
 import redis.clients.jedis.timeseries.*;
 import redis.clients.jedis.util.KeyValue;
 
@@ -341,6 +336,11 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   @Override
   public Response<String> get(String key) {
     return appendCommand(commandObjects.get(key));
+  }
+
+  @Override
+  public Response<String> setGet(String key, String value, SetParams params) {
+    return appendCommand(commandObjects.setGet(key, value, params));
   }
 
   @Override
@@ -3158,6 +3158,11 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   }
 
   @Override
+  public Response<byte[]> setGet(byte[] key, byte[] value, SetParams params) {
+    return appendCommand(commandObjects.setGet(key, value, params));
+  }
+
+  @Override
   public Response<byte[]> getDel(byte[] key) {
     return appendCommand(commandObjects.getDel(key));
   }
@@ -3314,8 +3319,28 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   }
 
   @Override
+  public Response<String> ftCreate(String indexName, FTCreateParams createParams, Iterable<SchemaField> schemaFields) {
+    return appendCommand(commandObjects.ftCreate(indexName, createParams, schemaFields));
+  }
+
+  @Override
   public Response<String> ftAlter(String indexName, Schema schema) {
     return appendCommand(commandObjects.ftAlter(indexName, schema));
+  }
+
+  @Override
+  public Response<String> ftAlter(String indexName, Iterable<SchemaField> schemaFields) {
+    return appendCommand(commandObjects.ftAlter(indexName, schemaFields));
+  }
+
+  @Override
+  public Response<SearchResult> ftSearch(String indexName, String query) {
+    return appendCommand(commandObjects.ftSearch(indexName, query));
+  }
+
+  @Override
+  public Response<SearchResult> ftSearch(String indexName, String query, FTSearchParams searchParams) {
+    return appendCommand(commandObjects.ftSearch(indexName, query, searchParams));
   }
 
   @Override
@@ -3374,8 +3399,53 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   }
 
   @Override
+  public Response<Long> ftDictAdd(String dictionary, String... terms) {
+    return appendCommand(commandObjects.ftDictAdd(dictionary, terms));
+  }
+
+  @Override
+  public Response<Long> ftDictDel(String dictionary, String... terms) {
+    return appendCommand(commandObjects.ftDictDel(dictionary, terms));
+  }
+
+  @Override
+  public Response<Set<String>> ftDictDump(String dictionary) {
+    return appendCommand(commandObjects.ftDictDump(dictionary));
+  }
+
+  @Override
+  public Response<Long> ftDictAddBySampleKey(String indexName, String dictionary, String... terms) {
+    return appendCommand(commandObjects.ftDictAddBySampleKey(indexName, dictionary, terms));
+  }
+
+  @Override
+  public Response<Long> ftDictDelBySampleKey(String indexName, String dictionary, String... terms) {
+    return appendCommand(commandObjects.ftDictDelBySampleKey(indexName, dictionary, terms));
+  }
+
+  @Override
+  public Response<Set<String>> ftDictDumpBySampleKey(String indexName, String dictionary) {
+    return appendCommand(commandObjects.ftDictDumpBySampleKey(indexName, dictionary));
+  }
+
+  @Override
+  public Response<Map<String, Map<String, Double>>> ftSpellCheck(String index, String query) {
+    return appendCommand(commandObjects.ftSpellCheck(index, query));
+  }
+
+  @Override
+  public Response<Map<String, Map<String, Double>>> ftSpellCheck(String index, String query, FTSpellCheckParams spellCheckParams) {
+    return appendCommand(commandObjects.ftSpellCheck(index, query, spellCheckParams));
+  }
+
+  @Override
   public Response<Map<String, Object>> ftInfo(String indexName) {
     return appendCommand(commandObjects.ftInfo(indexName));
+  }
+
+  @Override
+  public Response<Set<String>> ftTagVals(String indexName, String fieldName) {
+    return appendCommand(commandObjects.ftTagVals(indexName, fieldName));
   }
 
   @Override
@@ -3411,6 +3481,46 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   @Override
   public Response<String> ftConfigSet(String indexName, String option, String value) {
     return appendCommand(commandObjects.ftConfigSet(indexName, option, value));
+  }
+
+  @Override
+  public Response<Long> ftSugAdd(String key, String string, double score) {
+    return appendCommand(commandObjects.ftSugAdd(key, string, score));
+  }
+
+  @Override
+  public Response<Long> ftSugAddIncr(String key, String string, double score) {
+    return appendCommand(commandObjects.ftSugAddIncr(key, string, score));
+  }
+
+  @Override
+  public Response<List<String>> ftSugGet(String key, String prefix) {
+    return appendCommand(commandObjects.ftSugGet(key, prefix));
+  }
+
+  @Override
+  public Response<List<String>> ftSugGet(String key, String prefix, boolean fuzzy, int max) {
+    return appendCommand(commandObjects.ftSugGet(key, prefix, fuzzy, max));
+  }
+
+  @Override
+  public Response<List<Tuple>> ftSugGetWithScores(String key, String prefix) {
+    return appendCommand(commandObjects.ftSugGetWithScores(key, prefix));
+  }
+
+  @Override
+  public Response<List<Tuple>> ftSugGetWithScores(String key, String prefix, boolean fuzzy, int max) {
+    return appendCommand(commandObjects.ftSugGetWithScores(key, prefix, fuzzy, max));
+  }
+
+  @Override
+  public Response<Boolean> ftSugDel(String key, String string) {
+    return appendCommand(commandObjects.ftSugDel(key, string));
+  }
+
+  @Override
+  public Response<Long> ftSugLen(String key) {
+    return appendCommand(commandObjects.ftSugLen(key));
   }
   // RediSearch commands
 
@@ -3571,6 +3681,16 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   }
 
   @Override
+  public Response<JSONArray> jsonNumIncrBy(String key, Path2 path, double value) {
+    return appendCommand(commandObjects.jsonNumIncrBy(key, path, value));
+  }
+
+  @Override
+  public Response<Double> jsonNumIncrBy(String key, Path path, double value) {
+    return appendCommand(commandObjects.jsonNumIncrBy(key, path, value));
+  }
+
+  @Override
   public Response<List<Long>> jsonArrAppend(String key, Path2 path, Object... objects) {
     return appendCommand(commandObjects.jsonArrAppend(key, path, objects));
   }
@@ -3718,6 +3838,31 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   }
 
   @Override
+  public Response<List<Long>> tsMAdd(Map.Entry<String, TSElement>... entries) {
+    return appendCommand(commandObjects.tsMAdd(entries));
+  }
+
+  @Override
+  public Response<Long> tsIncrBy(String key, double value) {
+    return appendCommand(commandObjects.tsIncrBy(key, value));
+  }
+
+  @Override
+  public Response<Long> tsIncrBy(String key, double value, long timestamp) {
+    return appendCommand(commandObjects.tsIncrBy(key, value, timestamp));
+  }
+
+  @Override
+  public Response<Long> tsDecrBy(String key, double value) {
+    return appendCommand(commandObjects.tsDecrBy(key, value));
+  }
+
+  @Override
+  public Response<Long> tsDecrBy(String key, double value, long timestamp) {
+    return appendCommand(commandObjects.tsDecrBy(key, value, timestamp));
+  }
+
+  @Override
   public Response<List<TSElement>> tsRange(String key, long fromTimestamp, long toTimestamp) {
     return appendCommand(commandObjects.tsRange(key, fromTimestamp, toTimestamp));
   }
@@ -3763,6 +3908,11 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   }
 
   @Override
+  public Response<TSElement> tsGet(String key, TSGetParams getParams) {
+    return appendCommand(commandObjects.tsGet(key, getParams));
+  }
+
+  @Override
   public Response<List<TSKeyValue<TSElement>>> tsMGet(TSMGetParams multiGetParams, String... filters) {
     return appendCommand(commandObjects.tsMGet(multiGetParams, filters));
   }
@@ -3770,6 +3920,11 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   @Override
   public Response<String> tsCreateRule(String sourceKey, String destKey, AggregationType aggregationType, long timeBucket) {
     return appendCommand(commandObjects.tsCreateRule(sourceKey, destKey, aggregationType, timeBucket));
+  }
+
+  @Override
+  public Response<String> tsCreateRule(String sourceKey, String destKey, AggregationType aggregationType, long bucketDuration, long alignTimestamp) {
+    return appendCommand(commandObjects.tsCreateRule(sourceKey, destKey, aggregationType, bucketDuration, alignTimestamp));
   }
 
   @Override
@@ -3822,6 +3977,16 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   @Override
   public Response<List<Boolean>> bfMExists(String key, String... items) {
     return appendCommand(commandObjects.bfMExists(key, items));
+  }
+
+  @Override
+  public Response<Map.Entry<Long, byte[]>> bfScanDump(String key, long iterator) {
+    return appendCommand(commandObjects.bfScanDump(key, iterator));
+  }
+
+  @Override
+  public Response<String> bfLoadChunk(String key, long iterator, byte[] data) {
+    return appendCommand(commandObjects.bfLoadChunk(key, iterator, data));
   }
 
   @Override
@@ -3882,6 +4047,16 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   @Override
   public Response<Long> cfCount(String key, String item) {
     return appendCommand(commandObjects.cfCount(key, item));
+  }
+
+  @Override
+  public Response<Map.Entry<Long, byte[]>> cfScanDump(String key, long iterator) {
+    return appendCommand(commandObjects.cfScanDump(key, iterator));
+  }
+
+  @Override
+  public Response<String> cfLoadChunk(String key, long iterator, byte[] data) {
+    return appendCommand(commandObjects.cfLoadChunk(key, iterator, data));
   }
 
   @Override
@@ -3963,6 +4138,86 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   public Response<Map<String, Object>> topkInfo(String key) {
     return appendCommand(commandObjects.topkInfo(key));
   }
+
+  @Override
+  public Response<String> tdigestCreate(String key) {
+    return appendCommand(commandObjects.tdigestCreate(key));
+  }
+
+  @Override
+  public Response<String> tdigestCreate(String key, int compression) {
+    return appendCommand(commandObjects.tdigestCreate(key, compression));
+  }
+
+  @Override
+  public Response<String> tdigestReset(String key) {
+    return appendCommand(commandObjects.tdigestReset(key));
+  }
+
+  @Override
+  public Response<String> tdigestMerge(String destinationKey, String... sourceKeys) {
+    return appendCommand(commandObjects.tdigestMerge(destinationKey, sourceKeys));
+  }
+
+  @Override
+  public Response<String> tdigestMerge(TDigestMergeParams mergeParams, String destinationKey, String... sourceKeys) {
+    return appendCommand(commandObjects.tdigestMerge(mergeParams, destinationKey, sourceKeys));
+  }
+
+  @Override
+  public Response<Map<String, Object>> tdigestInfo(String key) {
+    return appendCommand(commandObjects.tdigestInfo(key));
+  }
+
+  @Override
+  public Response<String> tdigestAdd(String key, double... values) {
+    return appendCommand(commandObjects.tdigestAdd(key, values));
+  }
+
+  @Override
+  public Response<List<Double>> tdigestCDF(String key, double... values) {
+    return appendCommand(commandObjects.tdigestCDF(key, values));
+  }
+
+  @Override
+  public Response<List<Double>> tdigestQuantile(String key, double... quantiles) {
+    return appendCommand(commandObjects.tdigestQuantile(key, quantiles));
+  }
+
+  @Override
+  public Response<Double> tdigestMin(String key) {
+    return appendCommand(commandObjects.tdigestMin(key));
+  }
+
+  @Override
+  public Response<Double> tdigestMax(String key) {
+    return appendCommand(commandObjects.tdigestMax(key));
+  }
+
+  @Override
+  public Response<Double> tdigestTrimmedMean(String key, double lowCutQuantile, double highCutQuantile) {
+    return appendCommand(commandObjects.tdigestTrimmedMean(key, lowCutQuantile, highCutQuantile));
+  }
+
+  @Override
+  public Response<List<Long>> tdigestRank(String key, double... values) {
+    return appendCommand(commandObjects.tdigestRank(key, values));
+  }
+
+  @Override
+  public Response<List<Long>> tdigestRevRank(String key, double... values) {
+    return appendCommand(commandObjects.tdigestRevRank(key, values));
+  }
+
+  @Override
+  public Response<List<Double>> tdigestByRank(String key, long... ranks) {
+    return appendCommand(commandObjects.tdigestByRank(key, ranks));
+  }
+
+  @Override
+  public Response<List<Double>> tdigestByRevRank(String key, long... ranks) {
+    return appendCommand(commandObjects.tdigestByRevRank(key, ranks));
+  }
   // RedisBloom commands
 
   // RedisGraph commands
@@ -4009,6 +4264,11 @@ public class Pipeline extends Queable implements PipelineCommands, PipelineBinar
   @Override
   public Response<String> graphDelete(String name) {
     return appendCommand(graphCommandObjects.graphDelete(name));
+  }
+
+  @Override
+  public Response<List<String>> graphProfile(String graphName, String query) {
+    return appendCommand(commandObjects.graphProfile(graphName, query));
   }
   // RedisGraph commands
 

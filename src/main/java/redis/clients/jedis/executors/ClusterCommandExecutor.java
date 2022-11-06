@@ -2,8 +2,8 @@ package redis.clients.jedis.executors;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +54,7 @@ public class ClusterCommandExecutor implements CommandExecutor {
           connection = provider.getConnection(commandObject.getArguments());
         }
 
-        return connection.executeCommand(commandObject);
+        return execute(connection, commandObject);
 
       } catch (JedisClusterOperationException jnrcne) {
         throw jnrcne;
@@ -93,6 +93,14 @@ public class ClusterCommandExecutor implements CommandExecutor {
         = new JedisClusterOperationException("No more cluster attempts left.");
     maxAttemptsException.addSuppressed(lastException);
     throw maxAttemptsException;
+  }
+
+  /**
+   * WARNING: This method is accessible for the purpose of testing.
+   * This should not be used or overriden.
+   */
+  protected <T> T execute(Connection connection, CommandObject<T> commandObject) {
+    return connection.executeCommand(commandObject);
   }
 
   /**
@@ -141,9 +149,14 @@ public class ClusterCommandExecutor implements CommandExecutor {
       throw new JedisClusterOperationException("Cluster retry deadline exceeded.");
     }
 
-    return millisLeft / (attemptsLeft * (attemptsLeft + 1));
+    long maxBackOff = millisLeft / (attemptsLeft * attemptsLeft);
+    return ThreadLocalRandom.current().nextLong(maxBackOff + 1);
   }
 
+  /**
+   * WARNING: This method is accessible for the purpose of testing.
+   * This should not be used or overriden.
+   */
   protected void sleep(long sleepMillis) {
     try {
       TimeUnit.MILLISECONDS.sleep(sleepMillis);

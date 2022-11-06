@@ -14,6 +14,8 @@ public class RedisBloomProtocol {
     EXISTS("BF.EXISTS"),
     MEXISTS("BF.MEXISTS"),
     INSERT("BF.INSERT"),
+    SCANDUMP("BF.SCANDUMP"),
+    LOADCHUNK("BF.LOADCHUNK"),
     INFO("BF.INFO");
 
     private final byte[] raw;
@@ -98,9 +100,27 @@ public class RedisBloomProtocol {
     }
   }
 
+  public enum TDigestCommand implements ProtocolCommand {
+
+    CREATE, INFO, ADD, RESET, MERGE, CDF, QUANTILE, MIN, MAX, TRIMMED_MEAN,
+    RANK, REVRANK, BYRANK, BYREVRANK;
+
+    private final byte[] raw;
+
+    private TDigestCommand() {
+      raw = SafeEncoder.encode("TDIGEST." + name());
+    }
+
+    @Override
+    public byte[] getRaw() {
+      return raw;
+    }
+  }
+
   public enum RedisBloomKeyword implements Rawable {
 
-    CAPACITY, ERROR, NOCREATE, EXPANSION, NONSCALING, BUCKETSIZE, MAXITERATIONS, ITEMS, WEIGHTS;
+    CAPACITY, ERROR, NOCREATE, EXPANSION, NONSCALING, BUCKETSIZE, MAXITERATIONS, ITEMS, WEIGHTS,
+    COMPRESSION, OVERRIDE;
 
     private final byte[] raw;
 

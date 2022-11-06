@@ -1,8 +1,10 @@
-package redis.clients.jedis.bloom;
+package redis.clients.jedis.bloom.commands;
 
 import java.util.List;
 import java.util.Map;
 import redis.clients.jedis.Response;
+import redis.clients.jedis.bloom.CFInsertParams;
+import redis.clients.jedis.bloom.CFReserveParams;
 
 public interface CuckooFilterPipelineCommands {
 
@@ -27,6 +29,10 @@ public interface CuckooFilterPipelineCommands {
   Response<Boolean> cfDel(String key, String item);
 
   Response<Long> cfCount(String key, String item);
+
+  Response<Map.Entry<Long, byte[]>> cfScanDump(String key, long iterator);
+
+  Response<String> cfLoadChunk(String key, long iterator, byte[] data);
 
   Response<Map<String, Object>> cfInfo(String key);
 }

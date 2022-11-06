@@ -16,12 +16,23 @@ public class FieldName implements IParams {
   private String attribute;
 
   public FieldName(String name) {
-    this(name, null);
+    this.name = name;
   }
 
   public FieldName(String name, String attribute) {
     this.name = name;
     this.attribute = attribute;
+  }
+
+  public FieldName as(String attribute) {
+    if (attribute == null) {
+      throw new IllegalArgumentException("Setting null as field attribute is not allowed.");
+    }
+    if (this.attribute != null) {
+      throw new IllegalStateException("Attribute for this field is already set.");
+    }
+    this.attribute = attribute;
+    return this;
   }
 
   public int addCommandEncodedArguments(List<String> args) {
@@ -62,6 +73,7 @@ public class FieldName implements IParams {
     addCommandArguments(args);
   }
 
+  @Deprecated // TODO: remove?
   String getName() {
     return name;
   }
@@ -73,11 +85,6 @@ public class FieldName implements IParams {
 
   public static FieldName of(String name) {
     return new FieldName(name);
-  }
-
-  public FieldName as(String attribute) {
-    this.attribute = attribute;
-    return this;
   }
 
   public static FieldName[] convert(String... names) {
