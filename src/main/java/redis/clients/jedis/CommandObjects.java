@@ -38,6 +38,28 @@ public class CommandObjects {
     return new CommandArguments(command);
   }
 
+  private final CommandObject<String> PING_COMMAND_OBJECT = new CommandObject<>(commandArguments(PING), BuilderFactory.STRING);
+
+  public final CommandObject<String> ping() {
+    return PING_COMMAND_OBJECT;
+  }
+
+  private final CommandObject<String> FLUSHALL_COMMAND_OBJECT = new CommandObject<>(commandArguments(FLUSHALL), BuilderFactory.STRING);
+
+  public final CommandObject<String> flushAll() {
+    return FLUSHALL_COMMAND_OBJECT;
+  }
+
+  private final CommandObject<String> FLUSHDB_COMMAND_OBJECT = new CommandObject<>(commandArguments(FLUSHDB), BuilderFactory.STRING);
+
+  public final CommandObject<String> flushDB() {
+    return FLUSHDB_COMMAND_OBJECT;
+  }
+
+  public final CommandObject<String> configSet(String parameter, String value) {
+    return new CommandObject<>(commandArguments(Command.CONFIG).add(Keyword.SET).add(parameter).add(value), BuilderFactory.STRING);
+  }
+
   // Key commands
   public final CommandObject<Boolean> exists(String key) {
     return new CommandObject<>(commandArguments(Command.EXISTS).key(key), BuilderFactory.BOOLEAN);
@@ -2765,13 +2787,27 @@ public class CommandObjects {
         BuilderFactory.RAW_OBJECT);
   }
 
+  public final CommandObject<List<Boolean>> scriptExists(List<String> sha1s) {
+    return new CommandObject<>(commandArguments(SCRIPT).add(Keyword.EXISTS).addObjects(sha1s), BuilderFactory.BOOLEAN_LIST);
+  }
+
   public final CommandObject<List<Boolean>> scriptExists(String sampleKey, String... sha1s) {
     return new CommandObject<>(commandArguments(SCRIPT).add(Keyword.EXISTS).addObjects((Object[]) sha1s)
         .processKey(sampleKey), BuilderFactory.BOOLEAN_LIST);
   }
 
+  public final CommandObject<String> scriptLoad(String script) {
+    return new CommandObject<>(commandArguments(SCRIPT).add(LOAD).add(script), BuilderFactory.STRING);
+  }
+
   public final CommandObject<String> scriptLoad(String script, String sampleKey) {
     return new CommandObject<>(commandArguments(SCRIPT).add(LOAD).add(script).processKey(sampleKey), BuilderFactory.STRING);
+  }
+
+  private final CommandObject<String> SCRIPT_FLUSH_COMMAND_OBJECT = new CommandObject<>(commandArguments(SCRIPT).add(FLUSH), BuilderFactory.STRING);
+
+  public final CommandObject<String> scriptFlush() {
+    return SCRIPT_FLUSH_COMMAND_OBJECT;
   }
 
   public final CommandObject<String> scriptFlush(String sampleKey) {
@@ -2780,6 +2816,12 @@ public class CommandObjects {
 
   public final CommandObject<String> scriptFlush(String sampleKey, FlushMode flushMode) {
     return new CommandObject<>(commandArguments(SCRIPT).add(FLUSH).add(flushMode).processKey(sampleKey), BuilderFactory.STRING);
+  }
+
+  private final CommandObject<String> SCRIPT_KILL_COMMAND_OBJECT = new CommandObject<>(commandArguments(SCRIPT).add(KILL), BuilderFactory.STRING);
+
+  public final CommandObject<String> scriptKill() {
+    return SCRIPT_KILL_COMMAND_OBJECT;
   }
 
   public final CommandObject<String> scriptKill(String sampleKey) {
@@ -2805,6 +2847,12 @@ public class CommandObjects {
 
   public final CommandObject<String> scriptKill(byte[] sampleKey) {
     return new CommandObject<>(commandArguments(SCRIPT).add(KILL).processKey(sampleKey), BuilderFactory.STRING);
+  }
+
+  private final CommandObject<String> SLOWLOG_RESET_COMMAND_OBJECT = new CommandObject<>(commandArguments(SLOWLOG).add(RESET), BuilderFactory.STRING);
+
+  public final CommandObject<String> slowlogReset() {
+    return SLOWLOG_RESET_COMMAND_OBJECT;
   }
 
   public final CommandObject<Object> fcall(String name, List<String> keys, List<String> args) {

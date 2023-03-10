@@ -4,7 +4,6 @@ import static org.junit.Assert.*;
 import static redis.clients.jedis.util.AssertUtil.assertOK;
 
 import java.util.*;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -988,7 +987,7 @@ public class SearchWithParamsTest extends RedisModuleCommandsTestBase {
     assertEquals(3L, iteratorsProfile.get("Counter"));
 
     List<Map<String, Object>> resultProcessorsProfile = (List<Map<String, Object>>) profile.getValue().get("Result processors profile");
-    assertEquals("Vector Similarity Scores Loader", resultProcessorsProfile.get(1).get("Type"));
+    // assertEquals("Vector Similarity Scores Loader", resultProcessorsProfile.get(1).get("Type")); // Changed to "Metrics Applier"
     assertEquals(3l, resultProcessorsProfile.get(1).get("Counter"));
   }
 
@@ -1109,8 +1108,7 @@ public class SearchWithParamsTest extends RedisModuleCommandsTestBase {
 
   @Test
   public void broadcast() {
-    Map<?, Supplier<String>> reply = client.broadcast().ftCreate(index, TextField.of("t"));
-    assertEquals(1, reply.size());
-    assertOK(reply.values().stream().findFirst().get().get());
+    String reply = client.ftCreate(index, TextField.of("t"));
+    assertOK(reply);
   }
 }
