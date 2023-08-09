@@ -59,14 +59,6 @@ public interface RediSearchPipelineCommands {
 
   Response<AggregationResult> ftAggregate(String indexName, AggregationBuilder aggr);
 
-  Response<AggregationResult> ftCursorRead(String indexName, long cursorId, int count);
-
-  Response<String> ftCursorDel(String indexName, long cursorId);
-
-  Response<String> ftDropIndex(String indexName);
-
-  Response<String> ftDropIndexDD(String indexName);
-
   Response<String> ftSynUpdate(String indexName, String synonymGroupId, String... terms);
 
   Response<Map<String, List<String>>> ftSynDump(String indexName);
@@ -91,12 +83,6 @@ public interface RediSearchPipelineCommands {
   Response<Map<String, Object>> ftInfo(String indexName);
 
   Response<Set<String>> ftTagVals(String indexName, String fieldName);
-
-  Response<String> ftAliasAdd(String aliasName, String indexName);
-
-  Response<String> ftAliasUpdate(String aliasName, String indexName);
-
-  Response<String> ftAliasDel(String aliasName);
 
   Response<Map<String, String>> ftConfigGet(String option);
 
